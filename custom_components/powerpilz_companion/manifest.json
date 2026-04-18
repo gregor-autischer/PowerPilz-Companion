@@ -1,0 +1,14 @@
+{
+  "domain": "powerpilz_companion",
+  "name": "PowerPilz Smart Schedule",
+  "version": "0.2.0",
+  "codeowners": ["@gregor-autischer"],
+  "config_flow": true,
+  "dependencies": ["schedule"],
+  "after_dependencies": ["schedule"],
+  "documentation": "https://github.com/gregor-autischer/PowerPilz-Companion",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/gregor-autischer/PowerPilz-Companion/issues",
+  "requirements": [],
+  "integration_type": "helper"
+}

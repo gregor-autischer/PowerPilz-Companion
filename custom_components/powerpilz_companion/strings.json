@@ -1,0 +1,66 @@
+{
+  "title": "PowerPilz Smart Schedule",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Schedule",
+        "description": "Bundles a target device, three override modes (Off / On / Auto) and a weekly schedule in one helper.\n\n💡 **Linked schedule** — leave empty and a native Schedule helper with the same name will be created automatically (e.g. 'Livingroom Plan' → `schedule.livingroom_plan`). Or pick an existing schedule here to link to that one instead.\n\nIn your Lovelace cards you only need to reference this Smart Schedule entity — the linked schedule is exposed via its attributes.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Device to control",
+          "linked_schedule": "Linked schedule helper (leave empty to auto-create)",
+          "mode_off_name": "Off mode — name",
+          "mode_off_icon": "Off mode — icon",
+          "mode_on_name": "On mode — name",
+          "mode_on_icon": "On mode — icon",
+          "mode_auto_name": "Auto mode — name",
+          "mode_auto_icon": "Auto mode — icon",
+          "restore_auto_on_boundary": "Resume Auto on next schedule boundary"
+        },
+        "data_description": {
+          "target_entity": "The switch, light or input_boolean that this helper automatically turns on/off when in Auto mode.",
+          "linked_schedule": "Optional. Leave empty to auto-create a new schedule helper with the same name. Pick an existing schedule entity to link to that one instead.",
+          "mode_off_name": "Display name for the Off mode (force device off).",
+          "mode_off_icon": "Icon shown while in Off mode.",
+          "mode_on_name": "Display name for the On mode (force device on).",
+          "mode_on_icon": "Icon shown while in On mode.",
+          "mode_auto_name": "Display name for the Auto mode (device follows the linked schedule).",
+          "mode_auto_icon": "Icon shown while in Auto mode.",
+          "restore_auto_on_boundary": "If enabled, a manual On/Off override is automatically lifted at the next schedule state change."
+        }
+      }
+    },
+    "error": {
+      "duplicate_mode_names": "The three mode names must be different."
+    },
+    "abort": {
+      "already_configured": "This configuration is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Schedule options",
+        "description": "Adjust the helper settings. The linked schedule shown below is the one auto-created when this helper was set up — open that helper under Settings → Helpers to edit its weekly plan. You can also re-link to a different schedule here if needed.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Device to control",
+          "linked_schedule": "Linked schedule helper",
+          "mode_off_name": "Off mode — name",
+          "mode_off_icon": "Off mode — icon",
+          "mode_on_name": "On mode — name",
+          "mode_on_icon": "On mode — icon",
+          "mode_auto_name": "Auto mode — name",
+          "mode_auto_icon": "Auto mode — icon",
+          "restore_auto_on_boundary": "Resume Auto on next schedule boundary"
+        },
+        "data_description": {
+          "linked_schedule": "The schedule entity whose on/off state this Smart Schedule follows in Auto mode. By default it's the one auto-created at setup time — change only if you want to follow a different schedule."
+        }
+      }
+    },
+    "error": {
+      "duplicate_mode_names": "The three mode names must be different."
+    }
+  }
+}

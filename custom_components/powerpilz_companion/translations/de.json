@@ -1,0 +1,66 @@
+{
+  "title": "PowerPilz Smart Zeitschaltuhr",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Zeitschaltuhr",
+        "description": "Verbindet ein Zielgerät, drei Modi (Aus / Ein / Auto) und einen Wochenplan in einem Helfer.\n\n💡 **Verknüpfter Zeitplan** — leer lassen, dann wird automatisch ein nativer Zeitplan-Helfer mit dem gleichen Namen angelegt (z.B. 'Wohnzimmer Plan' → `schedule.wohnzimmer_plan`). Oder einen bestehenden Zeitplan auswählen, um zu dem zu verlinken.\n\nIn deinen Lovelace-Karten musst du später nur diese Smart-Zeitschaltuhr-Entität angeben — der verknüpfte Zeitplan wird über deren Attribute mitgeliefert.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Zu steuerndes Gerät",
+          "linked_schedule": "Verknüpfter Zeitplan-Helfer (leer lassen für automatische Erstellung)",
+          "mode_off_name": "Aus-Modus — Name",
+          "mode_off_icon": "Aus-Modus — Symbol",
+          "mode_on_name": "Ein-Modus — Name",
+          "mode_on_icon": "Ein-Modus — Symbol",
+          "mode_auto_name": "Auto-Modus — Name",
+          "mode_auto_icon": "Auto-Modus — Symbol",
+          "restore_auto_on_boundary": "Auto bei nächster Zeitplan-Grenze wiederherstellen"
+        },
+        "data_description": {
+          "target_entity": "Der Switch, das Licht oder input_boolean, das dieser Helfer im Auto-Modus automatisch ein-/ausschaltet.",
+          "linked_schedule": "Optional. Leer lassen, dann wird automatisch ein neuer Zeitplan-Helfer mit dem gleichen Namen angelegt. Oder eine bestehende Zeitplan-Entität auswählen, um zu der zu verlinken.",
+          "mode_off_name": "Anzeigename für den Aus-Modus (Gerät immer aus).",
+          "mode_off_icon": "Symbol im Aus-Modus.",
+          "mode_on_name": "Anzeigename für den Ein-Modus (Gerät immer an).",
+          "mode_on_icon": "Symbol im Ein-Modus.",
+          "mode_auto_name": "Anzeigename für den Auto-Modus (Gerät folgt dem verknüpften Zeitplan).",
+          "mode_auto_icon": "Symbol im Auto-Modus.",
+          "restore_auto_on_boundary": "Wenn aktiviert, wird ein manueller Ein/Aus-Override bei der nächsten Zeitplan-Grenze automatisch aufgehoben."
+        }
+      }
+    },
+    "error": {
+      "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein."
+    },
+    "abort": {
+      "already_configured": "Diese Konfiguration ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Zeitschaltuhr Einstellungen",
+        "description": "Bearbeite die Helfer-Einstellungen. Der unten angezeigte verknüpfte Zeitplan ist der, der beim Anlegen automatisch erstellt wurde — öffne diesen Helfer unter Einstellungen → Helfer, um dessen Wochenplan zu bearbeiten. Bei Bedarf kannst du hier auch auf einen anderen Zeitplan umverlinken.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Zu steuerndes Gerät",
+          "linked_schedule": "Verknüpfter Zeitplan-Helfer",
+          "mode_off_name": "Aus-Modus — Name",
+          "mode_off_icon": "Aus-Modus — Symbol",
+          "mode_on_name": "Ein-Modus — Name",
+          "mode_on_icon": "Ein-Modus — Symbol",
+          "mode_auto_name": "Auto-Modus — Name",
+          "mode_auto_icon": "Auto-Modus — Symbol",
+          "restore_auto_on_boundary": "Auto bei nächster Zeitplan-Grenze wiederherstellen"
+        },
+        "data_description": {
+          "linked_schedule": "Die Zeitplan-Entität, deren Ein/Aus-Status diese Smart Zeitschaltuhr im Auto-Modus folgt. Standardmäßig ist es der beim Anlegen automatisch erstellte — nur ändern, wenn du einem anderen Zeitplan folgen willst."
+        }
+      }
+    },
+    "error": {
+      "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein."
+    }
+  }
+}

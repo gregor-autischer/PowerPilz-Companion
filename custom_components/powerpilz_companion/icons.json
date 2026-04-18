@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "sections": {}
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "smart_schedule": {
+        "default": "mdi:clock-outline",
+        "state": {
+          "off": "mdi:power-off",
+          "on": "mdi:power",
+          "auto": "mdi:clock-outline"
+        }
+      }
+    }
+  },
+  "services": {},
+  "issues": {}
+}
