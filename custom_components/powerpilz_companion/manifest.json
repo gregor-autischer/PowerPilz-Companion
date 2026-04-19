@@ -1,14 +1,14 @@
 {
   "domain": "powerpilz_companion",
   "name": "PowerPilz Smart Helpers",
-  "version": "0.3.0",
+  "after_dependencies": ["schedule"],
   "codeowners": ["@gregor-autischer"],
   "config_flow": true,
   "dependencies": ["schedule"],
-  "after_dependencies": ["schedule"],
   "documentation": "https://github.com/gregor-autischer/PowerPilz-Companion",
+  "integration_type": "helper",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/gregor-autischer/PowerPilz-Companion/issues",
   "requirements": [],
-  "integration_type": "helper"
+  "version": "0.3.0"
 }
