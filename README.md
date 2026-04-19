@@ -2,7 +2,7 @@
 
 A Home Assistant custom integration that adds two **Smart helper** types, each designed to collapse a multi-entity + bridging-automation setup into a single entity that drives your devices autonomously:
 
-- 🗓 **Smart Schedule** — a `select` entity wrapping a target device, three override modes (Off / On / Auto) and a linked native Schedule helper for the weekly plan.
+- 🗓 **Smart Schedule** — a `select` entity with three override modes (Off / On / Auto) plus an accompanying `binary_sensor` that reflects whether the weekly plan is currently active. Weekly blocks are stored inside the integration itself; edit them directly in the PowerPilz Schedule Lovelace card (long-press).
 - ⏱ **Smart Timer** — a `switch` entity that autonomously turns a target on at a configured start time and off at an end time (one-shot), with customizable icons, labels and direction.
 
 Companion to the [PowerPilz](https://github.com/gregor-autischer/PowerPilz) Lovelace cards pack — use them together for a drastically simpler dashboard setup, or use the Companion standalone with any other cards.
@@ -15,7 +15,7 @@ Each Companion helper bundles all of that logic into one entity:
 
 | Traditional HA setup | Companion replacement |
 | :-- | :-- |
-| schedule helper + switch + input_select mode + 2 automations | **one** Smart Schedule entity |
+| schedule helper + switch + input_select mode + 2 automations | **one** Smart Schedule entity (+ its binary_sensor) |
 | switch + 2 input_datetimes + input_boolean + 2 automations | **one** Smart Timer entity |
 
 ## Features
@@ -23,12 +23,14 @@ Each Companion helper bundles all of that logic into one entity:
 ### Smart Schedule
 
 - Single `select.*` entity exposing three modes (renameable, with custom icons): Off / On / Auto
-- Auto-linked native HA `schedule.*` helper (created automatically on setup, editable via HA's native drag-and-drop FullCalendar UI)
-- Optional: pick an existing schedule helper instead of auto-creating one
-- In **Auto** mode: mirrors the linked schedule's on/off state onto the target device
+- Weekly schedule stored **inside the integration** (v0.4+) — no separate `schedule.*` helper needed
+- Companion `binary_sensor.<name>_active` — use as a state trigger in automations, 1:1 replacement for `schedule.*` on/off triggers
+- Rich attributes on the select + binary_sensor for templates: `schedule_active`, `next_event`, `next_start`, `next_end`, `current_window`, `today_blocks`, `week_blocks`
+- In **Auto** mode: drives the target device on/off based on the weekly plan
 - In **Off** / **On** mode: forces the target to the corresponding state
 - Optional "resume Auto at next schedule boundary" — a manual override is automatically lifted at the next on/off transition (Nest-thermostat style)
-- Auto-cleanup: removing the helper deletes the auto-created linked schedule too
+- Edit the weekly plan directly in the PowerPilz Schedule card (long-press) — drag 15-minute blocks, click any block for minute-precise editing and per-block `data` payloads
+- Automatic migration from v0.3 linked-schedule helpers: weekly blocks are imported on first startup and the orphan native schedule is deleted
 
 ### Smart Timer
 
@@ -44,7 +46,6 @@ Each Companion helper bundles all of that logic into one entity:
 
 - Multilingual (English + German)
 - HACS-ready (Integration category)
-- No external dependencies beyond HA's built-in `schedule` component
 
 ## Installation
 
@@ -69,14 +70,15 @@ Copy `custom_components/powerpilz_companion` into your Home Assistant config dir
 3. Fill in:
    - **Name** — e.g. `Living Room Heating`
    - **Device to control** — switch / light / input_boolean / fan / climate
-   - **Linked schedule helper** — leave empty to auto-create a new `schedule.living_room_heating`, or pick an existing `schedule.*` to link to that one
    - **Mode names / icons** — customize how Off / On / Auto appear
    - **Resume Auto on next schedule boundary** — whether manual overrides auto-lift
 
 On confirmation you get:
 
-- `select.living_room_heating` — the Smart Schedule entity (three modes)
-- `schedule.living_room_heating` — the native weekly schedule (empty; ready to fill in via HA's drag-and-drop UI)
+- `select.living_room_heating` — the Smart Schedule entity (three modes, rich schedule attributes)
+- `binary_sensor.living_room_heating_active` — flips on/off with the weekly plan
+
+Edit the weekly plan by **long-pressing the PowerPilz Schedule card** on your dashboard.
 
 ### Smart Timer
 
@@ -93,7 +95,7 @@ You get `switch.dishwasher_timer`. Set the on/off times via the [PowerPilz Timer
 
 ## Editing
 
-- **Smart Schedule weekly plan** — open the linked `schedule.*` entry under Settings → Helpers and use HA's native drag-and-drop UI. Changes propagate to the Smart Schedule in real time.
+- **Smart Schedule weekly plan** — long-press the PowerPilz Schedule card on your dashboard to open the inline weekly editor.
 - **Smart Schedule / Timer settings** — click the gear icon on the helper under Settings → Devices & Services → PowerPilz Smart Helpers.
 - **Smart Timer on/off times** — via the PowerPilz Timer card (recommended) or via the `powerpilz_companion.set_timer` service.
 
@@ -108,17 +110,26 @@ Update the on and/or off datetime of a Smart Timer at runtime.
 | `entity_id` | entity | The Smart Timer switch entity |
 | `on` | string (ISO 8601) | Turn-on datetime — e.g. `2026-04-19T18:30:00`. Omit to leave unchanged. |
 | `off` | string (ISO 8601) | Turn-off datetime. Omit to leave unchanged. |
+| `on_option` | string | (Select targets only) Option to apply at the on-boundary. Omit to leave unchanged. |
+| `off_option` | string | (Select targets only) Option to apply at the off-boundary. Omit to leave unchanged. |
+
+### `powerpilz_companion.set_schedule_blocks`
+
+Replace the weekly blocks of a Smart Schedule helper. Used by the PowerPilz Schedule card, but also handy for automations (e.g. rotate between seasonal schedules).
+
+| Field | Type | Description |
+| :-- | :-- | :-- |
+| `entity_id` | entity | The Smart Schedule select entity |
+| `blocks` | dict | `{monday: [...], ..., sunday: [...]}`, each list holding `{from, to, data?}` entries. Times are `HH:MM:SS` (24:00:00 allowed as end-of-day). |
 
 ## Lovelace integration
 
-The [PowerPilz](https://github.com/gregor-autischer/PowerPilz) dashboard card pack has native "Companion mode" for both Schedule and Timer cards: turn one toggle on and you only need to reference the Smart helper entity — the card derives all the sub-entities from its attributes.
+The [PowerPilz](https://github.com/gregor-autischer/PowerPilz) dashboard card pack reads all relevant state from the Smart helper's attributes — one entity on the card, no bridging.
 
-| Companion helper | Paired card | Attribute the card reads |
+| Companion helper | Paired card | Attributes the card reads |
 | :-- | :-- | :-- |
-| Smart Schedule select | [Schedule card](https://github.com/gregor-autischer/PowerPilz/blob/main/docs/cards/schedule.md) | `linked_schedule`, `target_entity`, `mode_names`, `mode_icons` |
+| Smart Schedule select | [Schedule card](https://github.com/gregor-autischer/PowerPilz/blob/main/docs/cards/schedule.md) | `week_blocks`, `target_entity`, `mode_names`, `mode_icons`, `schedule_active` |
 | Smart Timer switch | [Timer card](https://github.com/gregor-autischer/PowerPilz/blob/main/docs/cards/timer.md) | `target_entity`, `on_datetime`, `off_datetime`, `direction`, `state_names`, `state_icons` |
-
-Both cards stay fully compatible without the Companion installed — the new behaviour is opt-in.
 
 ## Exposed attributes
 
@@ -130,9 +141,21 @@ Both cards stay fully compatible without the Companion installed — the new beh
 | `mode_names` | `{off, on, auto}` → configured display name |
 | `mode_icons` | `{off, on, auto}` → configured MDI icon |
 | `target_entity` / `target_state` | Controlled device + its current state |
-| `linked_schedule` | Linked `schedule.*` entity ID |
-| `schedule_state` | Live `on` / `off` of the linked schedule |
+| `schedule_active` | `True` while the current time falls inside an active block |
 | `next_event` | ISO timestamp of the next on/off transition |
+| `next_start` / `next_end` | ISO timestamps of the next block start / end separately |
+| `current_window` | `{from, to, start, end, data?}` of the block currently active, or `null` |
+| `today_blocks` | Raw list of today's blocks |
+| `week_blocks` | Full `{monday: [...], ..., sunday: [...]}` |
+
+### Smart Schedule `binary_sensor.*_active`
+
+| Attribute | Description |
+| :-- | :-- |
+| State | `on` while a block is currently active, `off` otherwise |
+| `schedule_active` | Mirror of the state for convenience |
+| `current_window` / `next_event` / `next_start` / `next_end` / `today_blocks` / `week_blocks` | Mirrored from the parent select for single-entity templates |
+| `companion_entity` | Back-pointer to the parent `select.*` |
 
 ### Smart Timer `switch.*`
 
@@ -144,16 +167,45 @@ Both cards stay fully compatible without the Companion installed — the new beh
 | `direction` | `on_only` / `both` / `off_only` |
 | `state_names` | `{inactive, active}` → display label |
 | `state_icons` | `{inactive, active}` → MDI icon |
+| `on_option` / `off_option` | (Select targets only) logical option applied at each boundary |
+| `on_option_label` / `off_option_label` | (Select targets only) resolved display name for that option |
+
+## Using a Smart Schedule in automations
+
+The companion `binary_sensor.*_active` is a drop-in replacement for a native `schedule.*` helper as a state trigger:
+
+```yaml
+# Trigger when the schedule becomes active
+trigger:
+  platform: state
+  entity_id: binary_sensor.living_room_heating_active
+  to: "on"
+
+# Or condition
+condition:
+  condition: state
+  entity_id: binary_sensor.living_room_heating_active
+  state: "on"
+```
+
+Rich attributes on both the select and binary_sensor give you more:
+
+```yaml
+# Template: when's the next schedule event?
+template: >
+  {{ state_attr('select.living_room_heating', 'next_event') }}
+
+# Template: are we in a block with a specific data payload?
+template: >
+  {% set w = state_attr('select.living_room_heating', 'current_window') %}
+  {{ w is not none and w.data is defined and w.data.mode == 'heat' }}
+```
 
 ## How it works
 
 ### Smart Schedule
 
-On setup the integration either reuses an existing `schedule.*` entity or creates one on the fly. Runtime creation reaches into HA's `DictStorageCollection` via the websocket-command registry (`hass.data["websocket_api"]["schedule/create"]` → bound method → `__self__` → live collection) so the new entity is registered **without an HA restart**. A direct Store-write fallback is kept in case HA internals change.
-
-The `select` entity subscribes to the linked schedule's state via `async_track_state_change_event`. In Auto mode it mirrors the schedule's on/off onto the target. In Off / On it forces the target to that state.
-
-On removal (`async_remove_entry`), any auto-created linked schedule is deleted too.
+Weekly blocks live in `.storage/powerpilz_companion.schedules` — a dedicated Store, separate from `core.config_entries` so edits don't churn the entry registry. The select entity computes its `schedule_active` flag directly from the blocks with `async_track_point_in_time` callbacks scheduled at every upcoming boundary (no polling). In Auto mode it drives the target device on/off based on the computed flag; in Off / On mode it forces the target to that state. The accompanying `binary_sensor.*_active` mirrors the same flag for state-trigger automations.
 
 ### Smart Timer
 
@@ -161,19 +213,16 @@ Pure `async_track_point_in_time` callbacks at the on/off datetimes. No polling. 
 
 For select / input_select targets the timer calls `<domain>.select_option`. When the target exposes a `mode_names` attribute (as the Smart Schedule's select does) the timer stores the **logical key** (`off` / `on` / `auto`) rather than the display name, and resolves to the current display name via `mode_names` at fire time — renaming a mode in the Schedule helper therefore doesn't break the timer binding.
 
-## Relation to PowerPilz Cards
+## Migration from v0.3.x
 
-The [PowerPilz](https://github.com/gregor-autischer/PowerPilz) repository provides dashboard cards (Energy, Wallbox, Switch, Schedule, Timer, Graph, Graph-Stack). The Schedule and Timer cards there have a first-class "Companion mode" that works with the helpers from this integration.
+v0.4.0 drops the dependency on a linked native `schedule.*` helper. Existing Smart Schedule entries migrate automatically on first startup after the upgrade:
 
-**Installing both gives you:**
+1. The weekly blocks are read from the linked `schedule.*` entity.
+2. They are imported into the new internal Store.
+3. The orphaned `schedule.*` entity is deleted from HA's storage.
+4. The `linked_schedule` config option is removed from the entry.
 
-- The Companion integration does the heavy lifting (state machine, autonomous driving, reconciliation)
-- The Cards provide the visual + interactive surface on dashboards
-- Together: one Smart entity drives your device; one Lovelace card renders the full state with a single entity reference
-
-**Using only the Cards (without this integration)** still works — the cards fall back to manual mode with multi-entity configuration and require the classic bridging automations.
-
-**Using only the Companion (without the Cards)** also works — the Smart helpers are regular HA entities that appear in Auto-generated dashboards, can be triggered from automations/voice assistants, and can be controlled with any `select`/`switch` capable card.
+After the migration your Smart Schedule select continues to work with the same `entity_id`; no dashboard or automation changes required beyond switching state-triggered automations from `schedule.*` to the new `binary_sensor.*_active`.
 
 ## Development & releases
 
