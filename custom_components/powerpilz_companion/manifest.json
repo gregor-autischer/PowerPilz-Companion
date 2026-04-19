@@ -1,7 +1,7 @@
 {
   "domain": "powerpilz_companion",
   "name": "PowerPilz Smart Helpers",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "codeowners": ["@gregor-autischer"],
   "config_flow": true,
   "dependencies": ["schedule"],
