@@ -1,6 +1,9 @@
 set_timer:
   name: Set timer on/off times
-  description: Update the on and/or off datetime of a PowerPilz Smart Timer.
+  description: >-
+    Update the on and/or off datetime of a PowerPilz Smart Timer.
+    For select-target timers, optionally also override which option
+    is applied at each boundary for the next activation.
   target:
     entity:
       integration: powerpilz_companion
@@ -8,13 +11,31 @@ set_timer:
   fields:
     "on":
       name: On time
-      description: ISO 8601 datetime (e.g. 2026-04-19T18:30:00). Omit to leave unchanged.
+      description: ISO 8601 datetime (e.g. 2026-04-19T18:30:00). Omit to leave unchanged, empty string to clear.
       required: false
       selector:
         text:
     "off":
       name: Off time
-      description: ISO 8601 datetime. Omit to leave unchanged.
+      description: ISO 8601 datetime. Omit to leave unchanged, empty string to clear.
+      required: false
+      selector:
+        text:
+    on_option:
+      name: On option
+      description: >-
+        (select-target only) Which option to apply at the on-boundary.
+        For Smart Schedule targets, pass the logical key (off/on/auto).
+        For generic select/input_select targets, pass the display name.
+        Omit to leave unchanged, empty string to clear.
+      required: false
+      selector:
+        text:
+    off_option:
+      name: Off option
+      description: >-
+        (select-target only) Which option to apply at the off-boundary.
+        Same conventions as on_option.
       required: false
       selector:
         text:

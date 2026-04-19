@@ -50,6 +50,13 @@ SET_TIMER_SCHEMA = vol.Schema(
         vol.Required("entity_id"): cv.entity_id,
         vol.Optional("on"): cv.string,
         vol.Optional("off"): cv.string,
+        # For select/input_select targets: which option to apply at
+        # the on / off boundary. Overrides whatever was configured in
+        # the helper's Options flow for this and future activations
+        # (survives restarts via RestoreEntity). Omit to leave
+        # unchanged; pass an empty string to clear.
+        vol.Optional("on_option"): cv.string,
+        vol.Optional("off_option"): cv.string,
     }
 )
 
@@ -116,7 +123,25 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
         # `None` means "clear it".
         new_on = timer_entity._on_dt if on_dt is ... else on_dt  # noqa: SLF001
         new_off = timer_entity._off_dt if off_dt is ... else off_dt  # noqa: SLF001
-        await timer_entity.async_set_timer(new_on, new_off)
+
+        # Same sentinel logic for on_option / off_option: "" clears,
+        # omitted keeps existing.
+        on_option_raw = call.data.get("on_option")
+        off_option_raw = call.data.get("off_option")
+        new_on_option = (
+            timer_entity._on_option  # noqa: SLF001
+            if on_option_raw is None
+            else (on_option_raw or None)
+        )
+        new_off_option = (
+            timer_entity._off_option  # noqa: SLF001
+            if off_option_raw is None
+            else (off_option_raw or None)
+        )
+
+        await timer_entity.async_set_timer(
+            new_on, new_off, new_on_option, new_off_option
+        )
 
     hass.services.async_register(
         DOMAIN, SERVICE_SET_TIMER, handle_set_timer, schema=SET_TIMER_SCHEMA

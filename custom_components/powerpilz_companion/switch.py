@@ -34,7 +34,11 @@ from .const import (
     ATTR_DIRECTION,
     ATTR_NEXT_EVENT,
     ATTR_OFF_DATETIME,
+    ATTR_OFF_OPTION,
+    ATTR_OFF_OPTION_LABEL,
     ATTR_ON_DATETIME,
+    ATTR_ON_OPTION,
+    ATTR_ON_OPTION_LABEL,
     ATTR_STATE_ICONS,
     ATTR_STATE_NAMES,
     ATTR_TARGET_ENTITY,
@@ -152,6 +156,15 @@ class SmartTimerSwitch(SwitchEntity, RestoreEntity):
             self._active = last.state == STATE_ON
             self._on_dt = _parse_dt(last.attributes.get(ATTR_ON_DATETIME))
             self._off_dt = _parse_dt(last.attributes.get(ATTR_OFF_DATETIME))
+            # Restore per-activation option overrides so runtime changes
+            # made via the Lovelace card (e.g. "tonight set to 'Boost'
+            # instead of 'On'") survive an HA restart.
+            on_opt = last.attributes.get(ATTR_ON_OPTION)
+            if isinstance(on_opt, str):
+                self._on_option = on_opt or None
+            off_opt = last.attributes.get(ATTR_OFF_OPTION)
+            if isinstance(off_opt, str):
+                self._off_option = off_opt or None
 
         # Register in hass.data so the set_timer service can find us.
         hass_data = self.hass.data.setdefault(DOMAIN, {})
@@ -190,6 +203,7 @@ class SmartTimerSwitch(SwitchEntity, RestoreEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         target = self.hass.states.get(self._target_entity)
         next_event = self._next_event()
+        on_label, off_label = self._resolve_option_labels(target)
         return {
             ATTR_TARGET_ENTITY: self._target_entity,
             ATTR_TARGET_STATE: target.state if target else None,
@@ -199,7 +213,39 @@ class SmartTimerSwitch(SwitchEntity, RestoreEntity):
             ATTR_DIRECTION: self._direction,
             ATTR_STATE_NAMES: dict(self._state_names),
             ATTR_STATE_ICONS: dict(self._state_icons),
+            ATTR_ON_OPTION: self._on_option,
+            ATTR_OFF_OPTION: self._off_option,
+            ATTR_ON_OPTION_LABEL: on_label,
+            ATTR_OFF_OPTION_LABEL: off_label,
         }
+
+    def _resolve_option_labels(
+        self, target: Any
+    ) -> tuple[str | None, str | None]:
+        """Return human-readable labels for the stored on/off options.
+
+        For Smart-Schedule targets (detected by a `mode_names` dict on
+        the target state) the stored value is a logical key like `on`
+        or `auto`; we resolve it to the current display name. For
+        generic select/input_select targets the stored value is already
+        the display name, so we just pass it through. For non-select
+        targets both labels are None (the card falls back to "turn on /
+        off" wording)."""
+        if not self._is_select_target() or target is None:
+            return None, None
+        mode_names = target.attributes.get("mode_names") if target else None
+        resolve_label = None
+        if isinstance(mode_names, dict):
+            def _resolve(value: str | None) -> str | None:
+                if value is None:
+                    return None
+                if value in mode_names and isinstance(mode_names[value], str):
+                    return mode_names[value]
+                return value
+            resolve_label = _resolve
+        else:
+            resolve_label = lambda v: v  # noqa: E731
+        return resolve_label(self._on_option), resolve_label(self._off_option)
 
     async def async_turn_on(self, **_kwargs: Any) -> None:
         """Activate the timer."""
@@ -219,11 +265,18 @@ class SmartTimerSwitch(SwitchEntity, RestoreEntity):
     # ------------------------------------------------------------------
 
     async def async_set_timer(
-        self, on_dt: datetime | None, off_dt: datetime | None
+        self,
+        on_dt: datetime | None,
+        off_dt: datetime | None,
+        on_option: str | None = None,
+        off_option: str | None = None,
     ) -> None:
-        """Replace on/off datetimes and reschedule if active."""
+        """Replace on/off datetimes (and optionally option overrides) and
+        reschedule if active. Passing `None` for an option clears it."""
         self._on_dt = on_dt
         self._off_dt = off_dt
+        self._on_option = on_option or None
+        self._off_option = off_option or None
         if self._active:
             self._cancel_timers()
             self._schedule_timers()

@@ -108,6 +108,14 @@ ATTR_OFF_DATETIME = "off_datetime"
 ATTR_DIRECTION = "direction"
 ATTR_STATE_NAMES = "state_names"
 ATTR_STATE_ICONS = "state_icons"
+# For select/input_select targets the timer stores which option to set at
+# each boundary. The *_LABEL variants carry the resolved display name so
+# the Lovelace card can render "Set to 'On' at:" style labels without
+# having to duplicate the Smart-Schedule mode_names lookup.
+ATTR_ON_OPTION = "on_option"
+ATTR_OFF_OPTION = "off_option"
+ATTR_ON_OPTION_LABEL = "on_option_label"
+ATTR_OFF_OPTION_LABEL = "off_option_label"
 
 # --- Services ---
 
