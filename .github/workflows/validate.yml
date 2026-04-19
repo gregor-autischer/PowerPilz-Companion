@@ -62,6 +62,10 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
+          # Skip the brands check — this integration is not (yet) listed
+          # in the home-assistant/brands repository. HACS will still
+          # install it fine; brand registration is an optional cosmetic.
+          ignore: brands
 
   hassfest:
     name: Hassfest
