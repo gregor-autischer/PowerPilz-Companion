@@ -1,13 +1,15 @@
-"""Config flow for PowerPilz Companion Smart Schedule helper.
+"""Config flow for PowerPilz Companion.
 
-- **Creation** (`async_step_user`): Name, target, optional linked schedule,
-  modes. If linked_schedule is left empty, a native `schedule.*` helper is
-  auto-created and linked; otherwise the supplied entity is used.
-- **Options** (`async_step_init`): edit all of the above — linked_schedule
-  is pre-filled with the currently linked schedule so the user can see
-  and re-link if desired.
+Two helper kinds are offered:
 
-Both flows share a common schema builder and validator.
+  - **Smart Schedule** — select entity with 3 modes, auto-creates / links
+    a native HA schedule helper.
+  - **Smart Timer** — autonomous switch entity driving a target device
+    at configured on/off datetimes.
+
+The top-level `async_step_user` shows a menu; each branch has its own
+`async_show_form` step and creates an entry carrying a distinguishing
+`entry_type` field in its options.
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ENTRY_TYPE,
     CONF_LINKED_SCHEDULE,
     CONF_MODE_AUTO_ICON,
     CONF_MODE_AUTO_NAME,
@@ -34,32 +37,46 @@ from .const import (
     CONF_MODE_ON_NAME,
     CONF_NAME,
     CONF_RESTORE_AUTO_ON_BOUNDARY,
+    CONF_STATE_ACTIVE_ICON,
+    CONF_STATE_ACTIVE_NAME,
+    CONF_STATE_INACTIVE_ICON,
+    CONF_STATE_INACTIVE_NAME,
     CONF_TARGET_ENTITY,
+    CONF_TIMER_DIRECTION,
+    CONF_TIMER_OFF_OPTION,
+    CONF_TIMER_ON_OPTION,
     DEFAULT_MODE_AUTO_ICON,
     DEFAULT_MODE_AUTO_NAME,
     DEFAULT_MODE_OFF_ICON,
     DEFAULT_MODE_OFF_NAME,
     DEFAULT_MODE_ON_ICON,
     DEFAULT_MODE_ON_NAME,
+    DEFAULT_STATE_ACTIVE_ICON,
+    DEFAULT_STATE_ACTIVE_NAME,
+    DEFAULT_STATE_INACTIVE_ICON,
+    DEFAULT_STATE_INACTIVE_NAME,
+    DEFAULT_TIMER_DIRECTION,
     DOMAIN,
+    ENTRY_TYPE_SCHEDULE,
+    ENTRY_TYPE_TIMER,
+    TIMER_DIRECTION_BOTH,
+    TIMER_DIRECTION_OFF_ONLY,
+    TIMER_DIRECTION_ON_ONLY,
+    TIMER_DIRECTIONS,
 )
 from .schedule_linker import async_create_linked_schedule
 
 
-def _build_schema(
+# ---------------------------------------------------------------------------
+# Schedule schema + validation
+# ---------------------------------------------------------------------------
+
+
+def _schedule_schema(
     defaults: Mapping[str, Any] | None = None,
     *,
     linked_schedule_required: bool = False,
 ) -> vol.Schema:
-    """Build the form schema.
-
-    In **creation** the linked_schedule is OPTIONAL — leaving it empty
-    triggers auto-creation of a new native Schedule helper with the same
-    name; picking an existing `schedule.*` links to it instead.
-
-    In **options** it's REQUIRED and pre-filled with the currently linked
-    schedule so it can't be accidentally unlinked.
-    """
     defaults = defaults or {}
 
     target_selector = selector.EntitySelector(
@@ -100,8 +117,7 @@ def _build_schema(
     return vol.Schema(fields)
 
 
-def _normalize_and_validate(user_input: dict[str, Any]) -> None:
-    """Normalize user_input in place; raise vol.Invalid on errors."""
+def _schedule_validate(user_input: dict[str, Any]) -> None:
     for key, default in (
         (CONF_MODE_OFF_NAME, DEFAULT_MODE_OFF_NAME),
         (CONF_MODE_ON_NAME, DEFAULT_MODE_ON_NAME),
@@ -122,22 +138,231 @@ def _normalize_and_validate(user_input: dict[str, Any]) -> None:
         raise vol.Invalid("duplicate_mode_names")
 
 
+# ---------------------------------------------------------------------------
+# Timer schema + validation
+# ---------------------------------------------------------------------------
+
+
+TIMER_TARGET_DOMAINS = [
+    "switch",
+    "light",
+    "input_boolean",
+    "fan",
+    "climate",
+    "select",
+    "input_select",
+]
+
+
+def _is_select_domain(entity_id: str | None) -> bool:
+    if not entity_id or "." not in entity_id:
+        return False
+    return entity_id.split(".", 1)[0] in ("select", "input_select")
+
+
+def _timer_schema(defaults: Mapping[str, Any] | None = None) -> vol.Schema:
+    defaults = defaults or {}
+    target_selector = selector.EntitySelector(
+        selector.EntitySelectorConfig(domain=TIMER_TARGET_DOMAINS)
+    )
+    text_selector = selector.TextSelector(selector.TextSelectorConfig())
+    icon_selector = selector.IconSelector(selector.IconSelectorConfig())
+    direction_selector = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            mode=selector.SelectSelectorMode.DROPDOWN,
+            options=[
+                selector.SelectOptionDict(
+                    value=TIMER_DIRECTION_BOTH,
+                    label="Both on and off",
+                ),
+                selector.SelectOptionDict(
+                    value=TIMER_DIRECTION_ON_ONLY,
+                    label="On only",
+                ),
+                selector.SelectOptionDict(
+                    value=TIMER_DIRECTION_OFF_ONLY,
+                    label="Off only",
+                ),
+            ],
+        )
+    )
+
+    def _marker(key: str, required: bool, fallback: Any = None) -> Any:
+        current = defaults.get(key, fallback)
+        mk = vol.Required if required else vol.Optional
+        if current in (None, "", []):
+            return mk(key)
+        return mk(key, default=current)
+
+    return vol.Schema(
+        {
+            _marker(CONF_NAME, True, ""): text_selector,
+            _marker(CONF_TARGET_ENTITY, True): target_selector,
+            vol.Optional(
+                CONF_TIMER_DIRECTION,
+                default=defaults.get(CONF_TIMER_DIRECTION, DEFAULT_TIMER_DIRECTION),
+            ): direction_selector,
+            _marker(
+                CONF_STATE_INACTIVE_NAME, False, DEFAULT_STATE_INACTIVE_NAME
+            ): text_selector,
+            _marker(
+                CONF_STATE_INACTIVE_ICON, False, DEFAULT_STATE_INACTIVE_ICON
+            ): icon_selector,
+            _marker(
+                CONF_STATE_ACTIVE_NAME, False, DEFAULT_STATE_ACTIVE_NAME
+            ): text_selector,
+            _marker(
+                CONF_STATE_ACTIVE_ICON, False, DEFAULT_STATE_ACTIVE_ICON
+            ): icon_selector,
+        }
+    )
+
+
+def _timer_options_schema(
+    hass: Any,
+    target_entity: str,
+    direction: str,
+    defaults: Mapping[str, Any] | None = None,
+) -> tuple[vol.Schema, list[str], dict[str, str | None]]:
+    """Build the schema for the second timer step (select-target option pick).
+
+    If the target is a PowerPilz Smart Schedule (detected via its
+    `mode_names` attribute holding `{off, on, auto}` → display name), the
+    dropdown entries are `{value: logical_key, label: current_display}`
+    so the *stable logical key* is stored. At fire time `switch.py`
+    resolves the logical key back to the current display name via
+    `mode_names` — so renaming a mode in Smart Schedule doesn't break
+    the timer binding.
+
+    For all other select / input_select targets `value == label` (we
+    store the display option as-is).
+    """
+    defaults = defaults or {}
+    state = hass.states.get(target_entity) if hass else None
+    options_attr = state.attributes.get("options") if state else None
+    options_list: list[str] = (
+        [str(v) for v in options_attr] if isinstance(options_attr, list) else []
+    )
+
+    # Smart Schedule detection via `mode_names` attribute.
+    mode_names_attr = state.attributes.get("mode_names") if state else None
+    mode_names: dict[str, str] = {}
+    if isinstance(mode_names_attr, dict):
+        for key, display in mode_names_attr.items():
+            if isinstance(key, str) and isinstance(display, str):
+                mode_names[key] = display
+
+    is_smart_schedule = bool(mode_names)
+
+    # Build selector options.
+    if is_smart_schedule:
+        options_for_selector = [
+            selector.SelectOptionDict(value=logical, label=display)
+            for logical, display in mode_names.items()
+        ]
+        # Defaults for Smart Schedule: on-event → logical "on", off-event
+        # → logical "auto" (boost-until-resume pattern).
+        smart_on: str | None = "on" if "on" in mode_names else None
+        smart_off: str | None = "auto" if "auto" in mode_names else None
+    else:
+        options_for_selector = [
+            selector.SelectOptionDict(value=opt, label=opt)
+            for opt in options_list
+        ]
+        smart_on = None
+        smart_off = None
+
+    smart_defaults: dict[str, str | None] = {"on": smart_on, "off": smart_off}
+
+    dropdown = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            mode=selector.SelectSelectorMode.DROPDOWN,
+            options=options_for_selector,
+        )
+    )
+
+    fields: dict[Any, Any] = {}
+
+    if direction != "off_only":
+        default_on = defaults.get(CONF_TIMER_ON_OPTION) or smart_defaults["on"]
+        marker = (
+            vol.Optional(CONF_TIMER_ON_OPTION, default=default_on)
+            if default_on
+            else vol.Optional(CONF_TIMER_ON_OPTION)
+        )
+        fields[marker] = dropdown
+
+    if direction != "on_only":
+        default_off = defaults.get(CONF_TIMER_OFF_OPTION) or smart_defaults["off"]
+        marker = (
+            vol.Optional(CONF_TIMER_OFF_OPTION, default=default_off)
+            if default_off
+            else vol.Optional(CONF_TIMER_OFF_OPTION)
+        )
+        fields[marker] = dropdown
+
+    # The description still shows the raw display-name list for context.
+    display_options = (
+        list(mode_names.values()) if is_smart_schedule else options_list
+    )
+    return vol.Schema(fields), display_options, smart_defaults
+
+
+def _timer_validate(user_input: dict[str, Any]) -> None:
+    name = user_input.get(CONF_NAME)
+    if isinstance(name, str):
+        user_input[CONF_NAME] = name.strip()
+
+    direction = user_input.get(CONF_TIMER_DIRECTION)
+    if direction not in TIMER_DIRECTIONS:
+        user_input[CONF_TIMER_DIRECTION] = DEFAULT_TIMER_DIRECTION
+
+    for key, default in (
+        (CONF_STATE_INACTIVE_NAME, DEFAULT_STATE_INACTIVE_NAME),
+        (CONF_STATE_ACTIVE_NAME, DEFAULT_STATE_ACTIVE_NAME),
+    ):
+        value = user_input.get(key)
+        if not isinstance(value, str) or not value.strip():
+            user_input[key] = default
+        else:
+            user_input[key] = value.strip()
+
+
+# ---------------------------------------------------------------------------
+# Config flow (creation)
+# ---------------------------------------------------------------------------
+
+
 class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle creation of a PowerPilz Smart Schedule helper."""
+    """Handle creation of a PowerPilz helper (schedule or timer)."""
 
     VERSION = 1
 
+    # Used to carry the collected timer fields across the two-step flow
+    # when the target is a select entity.
+    _timer_pending: dict[str, Any] | None = None
+
     async def async_step_user(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Top-level menu: pick the helper kind."""
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["schedule", "timer"],
+        )
+
+    # --- Schedule branch ---
+
+    async def async_step_schedule(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                _normalize_and_validate(user_input)
+                _schedule_validate(user_input)
             except vol.Invalid as err:
                 errors["base"] = str(err)
             else:
-                # Resolve linked_schedule: supplied or auto-create.
                 supplied = user_input.get(CONF_LINKED_SCHEDULE)
                 if isinstance(supplied, str) and supplied.strip():
                     user_input[CONF_LINKED_SCHEDULE] = supplied.strip()
@@ -147,16 +372,78 @@ class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                     user_input[CONF_LINKED_SCHEDULE] = entity_id
 
+                user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_SCHEDULE
                 title = str(user_input.get(CONF_NAME) or "").strip() or "Smart Schedule"
                 return self.async_create_entry(
                     title=title, data={}, options=user_input
                 )
 
         return self.async_show_form(
-            step_id="user",
-            data_schema=_build_schema(user_input, linked_schedule_required=False),
+            step_id="schedule",
+            data_schema=_schedule_schema(user_input),
             errors=errors,
         )
+
+    # --- Timer branch ---
+
+    async def async_step_timer(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                _timer_validate(user_input)
+            except vol.Invalid as err:
+                errors["base"] = str(err)
+            else:
+                user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_TIMER
+                target = user_input.get(CONF_TARGET_ENTITY)
+
+                # For select targets, ask which option to apply at each
+                # boundary. For switch/light/input_boolean/etc. fall back
+                # to generic turn_on/turn_off and finalize immediately.
+                if isinstance(target, str) and _is_select_domain(target):
+                    self._timer_pending = dict(user_input)
+                    return await self.async_step_timer_options()
+
+                title = str(user_input.get(CONF_NAME) or "").strip() or "Smart Timer"
+                return self.async_create_entry(
+                    title=title, data={}, options=user_input
+                )
+
+        return self.async_show_form(
+            step_id="timer",
+            data_schema=_timer_schema(user_input),
+            errors=errors,
+        )
+
+    async def async_step_timer_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Second step for select-target timers: which option to set at on/off."""
+        pending = self._timer_pending or {}
+        target = pending.get(CONF_TARGET_ENTITY, "")
+        direction = pending.get(CONF_TIMER_DIRECTION, "both")
+        schema, options_list, _defaults = _timer_options_schema(
+            self.hass, target, direction, user_input or pending
+        )
+
+        if user_input is not None:
+            merged = {**pending, **user_input}
+            self._timer_pending = None
+            title = str(merged.get(CONF_NAME) or "").strip() or "Smart Timer"
+            return self.async_create_entry(title=title, data={}, options=merged)
+
+        return self.async_show_form(
+            step_id="timer_options",
+            data_schema=schema,
+            description_placeholders={
+                "target": target,
+                "options": ", ".join(options_list) if options_list else "—",
+            },
+        )
+
+    # --- Options flow dispatch ---
 
     @staticmethod
     @callback
@@ -164,27 +451,97 @@ class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
         return PowerPilzCompanionOptionsFlow(entry)
 
 
+# ---------------------------------------------------------------------------
+# Options flow (edit)
+# ---------------------------------------------------------------------------
+
+
 class PowerPilzCompanionOptionsFlow(OptionsFlow):
-    """Edit an existing PowerPilz Smart Schedule helper."""
+    """Edit an existing helper entry. Routes to the appropriate form
+    based on the entry's `entry_type`."""
 
     def __init__(self, entry: ConfigEntry) -> None:
         self._entry = entry
+        self._timer_pending: dict[str, Any] | None = None
 
     async def async_step_init(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        entry_type = self._entry.options.get(
+            CONF_ENTRY_TYPE, ENTRY_TYPE_SCHEDULE
+        )
+        if entry_type == ENTRY_TYPE_TIMER:
+            return await self.async_step_timer()
+        return await self.async_step_schedule()
+
+    async def async_step_schedule(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                _normalize_and_validate(user_input)
+                _schedule_validate(user_input)
             except vol.Invalid as err:
                 errors["base"] = str(err)
             else:
+                user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_SCHEDULE
                 return self.async_create_entry(title="", data=user_input)
 
         defaults = {**self._entry.options, **(user_input or {})}
         return self.async_show_form(
-            step_id="init",
-            data_schema=_build_schema(defaults, linked_schedule_required=True),
+            step_id="schedule",
+            data_schema=_schedule_schema(defaults, linked_schedule_required=True),
             errors=errors,
+        )
+
+    async def async_step_timer(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                _timer_validate(user_input)
+            except vol.Invalid as err:
+                errors["base"] = str(err)
+            else:
+                merged = {**self._entry.options, **user_input}
+                merged[CONF_ENTRY_TYPE] = ENTRY_TYPE_TIMER
+                target = merged.get(CONF_TARGET_ENTITY)
+                if isinstance(target, str) and _is_select_domain(target):
+                    self._timer_pending = merged
+                    return await self.async_step_timer_options()
+                # Not a select → clear any stale option settings.
+                merged.pop(CONF_TIMER_ON_OPTION, None)
+                merged.pop(CONF_TIMER_OFF_OPTION, None)
+                return self.async_create_entry(title="", data=merged)
+
+        defaults = {**self._entry.options, **(user_input or {})}
+        return self.async_show_form(
+            step_id="timer",
+            data_schema=_timer_schema(defaults),
+            errors=errors,
+        )
+
+    async def async_step_timer_options(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        pending = self._timer_pending or {}
+        target = pending.get(CONF_TARGET_ENTITY, "")
+        direction = pending.get(CONF_TIMER_DIRECTION, "both")
+        schema, options_list, _smart = _timer_options_schema(
+            self.hass, target, direction, user_input or pending
+        )
+
+        if user_input is not None:
+            merged = {**pending, **user_input}
+            self._timer_pending = None
+            return self.async_create_entry(title="", data=merged)
+
+        return self.async_show_form(
+            step_id="timer_options",
+            data_schema=schema,
+            description_placeholders={
+                "target": target,
+                "options": ", ".join(options_list) if options_list else "—",
+            },
         )

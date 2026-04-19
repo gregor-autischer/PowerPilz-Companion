@@ -1,8 +1,16 @@
 {
-  "title": "PowerPilz Smart Zeitschaltuhr",
+  "title": "PowerPilz Smart-Helfer",
   "config": {
     "step": {
       "user": {
+        "title": "PowerPilz Smart-Helfer",
+        "description": "Welche Art von Helfer möchtest du anlegen?",
+        "menu_options": {
+          "schedule": "Smart Zeitschaltuhr — Wochenplan mit Modus-Override",
+          "timer": "Smart Timer — einmaliges Ein/Aus zu einer bestimmten Zeit"
+        }
+      },
+      "schedule": {
         "title": "Smart Zeitschaltuhr",
         "description": "Verbindet ein Zielgerät, drei Modi (Aus / Ein / Auto) und einen Wochenplan in einem Helfer.\n\n💡 **Verknüpfter Zeitplan** — leer lassen, dann wird automatisch ein nativer Zeitplan-Helfer mit dem gleichen Namen angelegt (z.B. 'Wohnzimmer Plan' → `schedule.wohnzimmer_plan`). Oder einen bestehenden Zeitplan auswählen, um zu dem zu verlinken.\n\nIn deinen Lovelace-Karten musst du später nur diese Smart-Zeitschaltuhr-Entität angeben — der verknüpfte Zeitplan wird über deren Attribute mitgeliefert.",
         "data": {
@@ -28,6 +36,39 @@
           "mode_auto_icon": "Symbol im Auto-Modus.",
           "restore_auto_on_boundary": "Wenn aktiviert, wird ein manueller Ein/Aus-Override bei der nächsten Zeitplan-Grenze automatisch aufgehoben."
         }
+      },
+      "timer": {
+        "title": "Smart Timer",
+        "description": "Verbindet ein Zielgerät mit autonomer Ein/Aus-Zeit-Logik in einer einzelnen Switch-Entität.\n\n💡 Nach dem Anlegen dieses Helfers die Ein/Aus-Zeiten über die PowerPilz Timer-Karte auf deinem Dashboard setzen. Der Smart Timer steuert das Zielgerät autonom — keine Bridging-Automationen nötig.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Zu steuerndes Gerät",
+          "timer_direction": "Timer-Art",
+          "state_inactive_name": "Inaktiv-Zustand — Name",
+          "state_inactive_icon": "Inaktiv-Zustand — Symbol",
+          "state_active_name": "Aktiv-Zustand — Name",
+          "state_active_icon": "Aktiv-Zustand — Symbol"
+        },
+        "data_description": {
+          "target_entity": "Der Switch, das Licht, input_boolean, select oder input_select, das dieser Smart Timer steuert.",
+          "timer_direction": "'Ein und Aus' schaltet zur Startzeit ein und zur Endzeit aus. 'Nur Ein' schaltet zur Startzeit ein und deaktiviert sich dann (kein Aus-Event). 'Nur Aus' schaltet zur Endzeit aus (kein Ein-Event).",
+          "state_inactive_name": "Bezeichnung, die die Lovelace-Karte anzeigt, wenn der Timer nicht läuft.",
+          "state_inactive_icon": "Symbol, wenn der Timer inaktiv ist.",
+          "state_active_name": "Bezeichnung, wenn der Timer läuft.",
+          "state_active_icon": "Symbol, wenn der Timer läuft."
+        }
+      },
+      "timer_options": {
+        "title": "Timer-Optionen für Select-Target",
+        "description": "Das Target `{target}` ist eine Multi-State-Entität. Wähle, welche Option der Timer an jeder Grenze setzt.\n\nVerfügbare Optionen: {options}",
+        "data": {
+          "on_option": "Option zur Startzeit",
+          "off_option": "Option zur Endzeit"
+        },
+        "data_description": {
+          "on_option": "Die Option, die zur Startzeit gesetzt wird.",
+          "off_option": "Die Option, die zur Endzeit gesetzt wird."
+        }
       }
     },
     "error": {
@@ -39,7 +80,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "schedule": {
         "title": "Smart Zeitschaltuhr Einstellungen",
         "description": "Bearbeite die Helfer-Einstellungen. Der unten angezeigte verknüpfte Zeitplan ist der, der beim Anlegen automatisch erstellt wurde — öffne diesen Helfer unter Einstellungen → Helfer, um dessen Wochenplan zu bearbeiten. Bei Bedarf kannst du hier auch auf einen anderen Zeitplan umverlinken.",
         "data": {
@@ -57,10 +98,63 @@
         "data_description": {
           "linked_schedule": "Die Zeitplan-Entität, deren Ein/Aus-Status diese Smart Zeitschaltuhr im Auto-Modus folgt. Standardmäßig ist es der beim Anlegen automatisch erstellte — nur ändern, wenn du einem anderen Zeitplan folgen willst."
         }
+      },
+      "timer": {
+        "title": "Smart Timer Einstellungen",
+        "description": "Bearbeite die Helfer-Einstellungen. Die Ein/Aus-Zeiten werden über die PowerPilz Timer-Karte auf dem Dashboard gesetzt.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Zu steuerndes Gerät",
+          "timer_direction": "Timer-Art",
+          "state_inactive_name": "Inaktiv-Zustand — Name",
+          "state_inactive_icon": "Inaktiv-Zustand — Symbol",
+          "state_active_name": "Aktiv-Zustand — Name",
+          "state_active_icon": "Aktiv-Zustand — Symbol"
+        },
+        "data_description": {
+          "target_entity": "Der Switch, das Licht, input_boolean, select oder input_select, den dieser Smart Timer steuert.",
+          "timer_direction": "'Ein und Aus' schaltet zur Startzeit ein und zur Endzeit aus. 'Nur Ein' schaltet zur Startzeit ein und deaktiviert sich dann. 'Nur Aus' schaltet zur Endzeit aus.",
+          "state_inactive_name": "Bezeichnung, die die Lovelace-Karte anzeigt, wenn der Timer nicht läuft.",
+          "state_inactive_icon": "Symbol, wenn der Timer inaktiv ist.",
+          "state_active_name": "Bezeichnung, wenn der Timer läuft.",
+          "state_active_icon": "Symbol, wenn der Timer läuft."
+        }
+      },
+      "timer_options": {
+        "title": "Timer-Optionen für Select-Target",
+        "description": "Das Target `{target}` ist eine Multi-State-Entität. Wähle, welche Option der Timer an jeder Grenze setzt.\n\nVerfügbare Optionen: {options}",
+        "data": {
+          "on_option": "Option zur Startzeit",
+          "off_option": "Option zur Endzeit"
+        },
+        "data_description": {
+          "on_option": "Die Option, die zur Startzeit gesetzt wird.",
+          "off_option": "Die Option, die zur Endzeit gesetzt wird."
+        }
       }
     },
     "error": {
       "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein."
+    }
+  },
+  "services": {
+    "set_timer": {
+      "name": "Timer-Zeiten setzen",
+      "description": "Aktualisiert Ein- und/oder Aus-Datetime eines PowerPilz Smart Timers.",
+      "fields": {
+        "entity_id": {
+          "name": "Entität",
+          "description": "Die Smart-Timer-Switch-Entität."
+        },
+        "on": {
+          "name": "Einschaltzeit",
+          "description": "ISO-8601-Datetime (z.B. 2026-04-19T18:30:00). Weglassen, um unverändert zu lassen."
+        },
+        "off": {
+          "name": "Ausschaltzeit",
+          "description": "ISO-8601-Datetime. Weglassen, um unverändert zu lassen."
+        }
+      }
     }
   }
 }

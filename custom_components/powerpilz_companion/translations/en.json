@@ -1,8 +1,16 @@
 {
-  "title": "PowerPilz Smart Schedule",
+  "title": "PowerPilz Smart Helpers",
   "config": {
     "step": {
       "user": {
+        "title": "PowerPilz Smart Helpers",
+        "description": "Pick the kind of helper you want to create.",
+        "menu_options": {
+          "schedule": "Smart Schedule — weekly plan with mode override",
+          "timer": "Smart Timer — one-shot on/off at a specific time"
+        }
+      },
+      "schedule": {
         "title": "Smart Schedule",
         "description": "Bundles a target device, three override modes (Off / On / Auto) and a weekly schedule in one helper.\n\n💡 **Linked schedule** — leave empty and a native Schedule helper with the same name will be created automatically (e.g. 'Livingroom Plan' → `schedule.livingroom_plan`). Or pick an existing schedule here to link to that one instead.\n\nIn your Lovelace cards you only need to reference this Smart Schedule entity — the linked schedule is exposed via its attributes.",
         "data": {
@@ -28,6 +36,39 @@
           "mode_auto_icon": "Icon shown while in Auto mode.",
           "restore_auto_on_boundary": "If enabled, a manual On/Off override is automatically lifted at the next schedule state change."
         }
+      },
+      "timer": {
+        "title": "Smart Timer",
+        "description": "Bundles a target device with autonomous on/off-time logic in a single switch entity.\n\n💡 After creating this helper, set the on/off times via the PowerPilz Timer card on your dashboard. The Smart Timer drives the target device autonomously — no bridging automations needed.\n\nThe target can be a regular switch/light/input_boolean, OR a select/input_select (including a PowerPilz Smart Schedule). For select targets, you'll be asked next which option to apply at each boundary.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Device to control",
+          "timer_direction": "Timer kind",
+          "state_inactive_name": "Inactive state — name",
+          "state_inactive_icon": "Inactive state — icon",
+          "state_active_name": "Active state — name",
+          "state_active_icon": "Active state — icon"
+        },
+        "data_description": {
+          "target_entity": "The switch, light, input_boolean, select or input_select this Smart Timer controls.",
+          "timer_direction": "'Both' turns the device on at the start time and off at the end time. 'On only' turns on at the start time and deactivates (no off event). 'Off only' turns off at the end time (no on event).",
+          "state_inactive_name": "Label shown by the Lovelace card when the timer isn't running.",
+          "state_inactive_icon": "Icon shown while the timer is idle.",
+          "state_active_name": "Label shown while the timer is running.",
+          "state_active_icon": "Icon shown while the timer is running."
+        }
+      },
+      "timer_options": {
+        "title": "Timer select-target options",
+        "description": "The target `{target}` is a multi-state entity. Pick which option the timer sets at each boundary.\n\nAvailable options: {options}",
+        "data": {
+          "on_option": "Option at start time",
+          "off_option": "Option at end time"
+        },
+        "data_description": {
+          "on_option": "The option to apply at the start time (fires `<domain>.select_option`).",
+          "off_option": "The option to apply at the end time."
+        }
       }
     },
     "error": {
@@ -39,7 +80,7 @@
   },
   "options": {
     "step": {
-      "init": {
+      "schedule": {
         "title": "Smart Schedule options",
         "description": "Adjust the helper settings. The linked schedule shown below is the one auto-created when this helper was set up — open that helper under Settings → Helpers to edit its weekly plan. You can also re-link to a different schedule here if needed.",
         "data": {
@@ -57,10 +98,63 @@
         "data_description": {
           "linked_schedule": "The schedule entity whose on/off state this Smart Schedule follows in Auto mode. By default it's the one auto-created at setup time — change only if you want to follow a different schedule."
         }
+      },
+      "timer": {
+        "title": "Smart Timer options",
+        "description": "Adjust the helper settings. The on/off times are set via the PowerPilz Timer card on your dashboard. If the target is a select entity, you'll be asked next which option to apply at each boundary.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Device to control",
+          "timer_direction": "Timer kind",
+          "state_inactive_name": "Inactive state — name",
+          "state_inactive_icon": "Inactive state — icon",
+          "state_active_name": "Active state — name",
+          "state_active_icon": "Active state — icon"
+        },
+        "data_description": {
+          "target_entity": "The switch, light, input_boolean, select or input_select this Smart Timer controls.",
+          "timer_direction": "'Both' turns the device on at start and off at end. 'On only' turns on at start and then deactivates. 'Off only' turns off at end.",
+          "state_inactive_name": "Label shown by the Lovelace card when the timer isn't running.",
+          "state_inactive_icon": "Icon shown while the timer is idle.",
+          "state_active_name": "Label shown while the timer is running.",
+          "state_active_icon": "Icon shown while the timer is running."
+        }
+      },
+      "timer_options": {
+        "title": "Timer select-target options",
+        "description": "The target `{target}` is a multi-state entity. Pick which option the timer sets at each boundary.\n\nAvailable options: {options}",
+        "data": {
+          "on_option": "Option at start time",
+          "off_option": "Option at end time"
+        },
+        "data_description": {
+          "on_option": "The option to apply at the start time.",
+          "off_option": "The option to apply at the end time."
+        }
       }
     },
     "error": {
       "duplicate_mode_names": "The three mode names must be different."
+    }
+  },
+  "services": {
+    "set_timer": {
+      "name": "Set timer on/off times",
+      "description": "Update the on and/or off datetime of a PowerPilz Smart Timer.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "The Smart Timer switch entity."
+        },
+        "on": {
+          "name": "On time",
+          "description": "ISO 8601 datetime (e.g. 2026-04-19T18:30:00). Omit to leave unchanged."
+        },
+        "off": {
+          "name": "Off time",
+          "description": "ISO 8601 datetime. Omit to leave unchanged."
+        }
+      }
     }
   }
 }

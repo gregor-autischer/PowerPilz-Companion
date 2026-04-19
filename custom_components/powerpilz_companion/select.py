@@ -27,6 +27,8 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
+    CONF_ENTRY_TYPE,
+    ENTRY_TYPE_TIMER,
     ATTR_LINKED_SCHEDULE,
     ATTR_LOGICAL_MODE,
     ATTR_MODE_ICONS,
@@ -66,6 +68,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Smart Schedule select entity from a config entry."""
+    if entry.options.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_TIMER:
+        return
     async_add_entities([SmartScheduleSelect(entry)])
 
 
