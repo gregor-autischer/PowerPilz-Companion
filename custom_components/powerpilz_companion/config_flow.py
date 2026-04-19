@@ -2,8 +2,9 @@
 
 Two helper kinds are offered:
 
-  - **Smart Schedule** — select entity with 3 modes, auto-creates / links
-    a native HA schedule helper.
+  - **Smart Schedule** — select entity with 3 modes + companion
+    binary_sensor. Weekly blocks are edited in the PowerPilz Schedule
+    Lovelace card (long-press on the card).
   - **Smart Timer** — autonomous switch entity driving a target device
     at configured on/off datetimes.
 
@@ -28,7 +29,6 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_ENTRY_TYPE,
-    CONF_LINKED_SCHEDULE,
     CONF_MODE_AUTO_ICON,
     CONF_MODE_AUTO_NAME,
     CONF_MODE_OFF_ICON,
@@ -64,7 +64,6 @@ from .const import (
     TIMER_DIRECTION_ON_ONLY,
     TIMER_DIRECTIONS,
 )
-from .schedule_linker import async_create_linked_schedule
 
 
 # ---------------------------------------------------------------------------
@@ -74,8 +73,6 @@ from .schedule_linker import async_create_linked_schedule
 
 def _schedule_schema(
     defaults: Mapping[str, Any] | None = None,
-    *,
-    linked_schedule_required: bool = False,
 ) -> vol.Schema:
     defaults = defaults or {}
 
@@ -83,9 +80,6 @@ def _schedule_schema(
         selector.EntitySelectorConfig(
             domain=["switch", "light", "input_boolean", "fan", "climate"],
         )
-    )
-    schedule_selector = selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="schedule")
     )
     icon_selector = selector.IconSelector(selector.IconSelectorConfig())
     text_selector = selector.TextSelector(selector.TextSelectorConfig())
@@ -101,7 +95,6 @@ def _schedule_schema(
     fields: dict[Any, Any] = {}
     fields[_marker(CONF_NAME, True, "")] = text_selector
     fields[_marker(CONF_TARGET_ENTITY, True)] = target_selector
-    fields[_marker(CONF_LINKED_SCHEDULE, linked_schedule_required)] = schedule_selector
     fields[_marker(CONF_MODE_OFF_NAME, False, DEFAULT_MODE_OFF_NAME)] = text_selector
     fields[_marker(CONF_MODE_OFF_ICON, False, DEFAULT_MODE_OFF_ICON)] = icon_selector
     fields[_marker(CONF_MODE_ON_NAME, False, DEFAULT_MODE_ON_NAME)] = text_selector
@@ -363,15 +356,6 @@ class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
             except vol.Invalid as err:
                 errors["base"] = str(err)
             else:
-                supplied = user_input.get(CONF_LINKED_SCHEDULE)
-                if isinstance(supplied, str) and supplied.strip():
-                    user_input[CONF_LINKED_SCHEDULE] = supplied.strip()
-                else:
-                    entity_id = await async_create_linked_schedule(
-                        self.hass, preferred_name=user_input[CONF_NAME]
-                    )
-                    user_input[CONF_LINKED_SCHEDULE] = entity_id
-
                 user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_SCHEDULE
                 title = str(user_input.get(CONF_NAME) or "").strip() or "Smart Schedule"
                 return self.async_create_entry(
@@ -490,7 +474,7 @@ class PowerPilzCompanionOptionsFlow(OptionsFlow):
         defaults = {**self._entry.options, **(user_input or {})}
         return self.async_show_form(
             step_id="schedule",
-            data_schema=_schedule_schema(defaults, linked_schedule_required=True),
+            data_schema=_schedule_schema(defaults),
             errors=errors,
         )
 

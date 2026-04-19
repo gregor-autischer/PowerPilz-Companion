@@ -2,13 +2,15 @@
 
 Hosts two helper kinds under one domain:
 
-- **Smart Schedule** → a `select` entity with 3 modes linked to a native
-  HA schedule helper (auto-created on setup).
+- **Smart Schedule** → a `select` entity with 3 modes + a companion
+  `binary_sensor` exposing the currently-active state. Weekly schedule
+  blocks are stored natively by this integration (no external
+  `schedule.*` helper needed).
 - **Smart Timer** → a `switch` entity that autonomously drives a target
   device at configured on/off datetimes.
 
 The `entry_type` field in the config entry options decides which
-platform is used for a given entry.
+platforms are loaded for a given entry.
 """
 from __future__ import annotations
 
@@ -30,9 +32,16 @@ from .const import (
     DOMAIN,
     ENTRY_TYPE_SCHEDULE,
     ENTRY_TYPE_TIMER,
+    SERVICE_SET_SCHEDULE_BLOCKS,
     SERVICE_SET_TIMER,
+    WEEKDAY_KEYS,
 )
-from .schedule_linker import async_remove_linked_schedule
+from .storage import (
+    async_delete_entry as async_delete_storage_entry,
+    async_load_blocks,
+    async_migrate_from_schedule_entity,
+    async_save_blocks,
+)
 
 CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
@@ -42,7 +51,12 @@ _LOGGER = logging.getLogger(__name__)
 def _platforms_for(entry: ConfigEntry) -> list[Platform]:
     if entry.options.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_TIMER:
         return [Platform.SWITCH]
-    return [Platform.SELECT]
+    return [Platform.SELECT, Platform.BINARY_SENSOR]
+
+
+# ---------------------------------------------------------------------------
+# Service schemas
+# ---------------------------------------------------------------------------
 
 
 SET_TIMER_SCHEMA = vol.Schema(
@@ -57,6 +71,31 @@ SET_TIMER_SCHEMA = vol.Schema(
         # unchanged; pass an empty string to clear.
         vol.Optional("on_option"): cv.string,
         vol.Optional("off_option"): cv.string,
+    }
+)
+
+
+_DAY_SCHEMA = vol.Schema(
+    [
+        vol.Schema(
+            {
+                vol.Required("from"): cv.string,
+                vol.Required("to"): cv.string,
+                vol.Optional("data"): dict,
+            },
+            extra=vol.REMOVE_EXTRA,
+        )
+    ]
+)
+
+
+SET_SCHEDULE_BLOCKS_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("blocks"): vol.Schema(
+            {vol.Optional(day): _DAY_SCHEMA for day in WEEKDAY_KEYS},
+            extra=vol.REMOVE_EXTRA,
+        ),
     }
 )
 
@@ -82,6 +121,31 @@ def _parse_service_datetime(value: Any) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+# ---------------------------------------------------------------------------
+# Entry resolution helpers
+# ---------------------------------------------------------------------------
+
+
+def _find_schedule_entity_for(
+    hass: HomeAssistant, entity_id: str
+) -> tuple[ConfigEntry | None, Any | None]:
+    """Given the entity_id of a Smart Schedule select, return the entry
+    and live entity object, or (None, None) if it can't be resolved."""
+    registry = er.async_get(hass)
+    entry_reg = registry.async_get(entity_id)
+    if not entry_reg or entry_reg.platform != DOMAIN or not entry_reg.config_entry_id:
+        return None, None
+
+    config_entry = hass.config_entries.async_get_entry(entry_reg.config_entry_id)
+    bucket = hass.data.get(DOMAIN, {}).get(entry_reg.config_entry_id, {})
+    return config_entry, bucket.get("entity") if isinstance(bucket, dict) else None
+
+
+# ---------------------------------------------------------------------------
+# Service handlers
+# ---------------------------------------------------------------------------
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
@@ -143,8 +207,36 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
             new_on, new_off, new_on_option, new_off_option
         )
 
+    async def handle_set_schedule_blocks(call: ServiceCall) -> None:
+        entity_id: str = call.data["entity_id"]
+        blocks: dict[str, list[dict[str, Any]]] = call.data["blocks"]
+
+        config_entry, entity = _find_schedule_entity_for(hass, entity_id)
+        if config_entry is None:
+            _LOGGER.warning(
+                "set_schedule_blocks: %s is not a PowerPilz Smart Schedule entity",
+                entity_id,
+            )
+            return
+
+        saved = await async_save_blocks(hass, config_entry.entry_id, blocks)
+        if entity is not None and hasattr(entity, "async_update_blocks"):
+            await entity.async_update_blocks(saved)
+        else:
+            _LOGGER.debug(
+                "set_schedule_blocks: entity for %s not live yet; blocks "
+                "persisted and will load on next setup.",
+                entity_id,
+            )
+
     hass.services.async_register(
         DOMAIN, SERVICE_SET_TIMER, handle_set_timer, schema=SET_TIMER_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_SCHEDULE_BLOCKS,
+        handle_set_schedule_blocks,
+        schema=SET_SCHEDULE_BLOCKS_SCHEMA,
     )
     return True
 
@@ -152,6 +244,37 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
+
+    # One-shot migration from the legacy v0.3 linked-schedule model: if
+    # the entry still carries `linked_schedule` and our store doesn't
+    # have blocks for it, read the native schedule helper and import
+    # its weekly plan. Then clear the config reference.
+    if entry.options.get(CONF_ENTRY_TYPE, ENTRY_TYPE_SCHEDULE) == ENTRY_TYPE_SCHEDULE:
+        legacy_link = entry.options.get(CONF_LINKED_SCHEDULE) or entry.data.get(
+            CONF_LINKED_SCHEDULE
+        )
+        if isinstance(legacy_link, str) and legacy_link:
+            try:
+                imported = await async_migrate_from_schedule_entity(
+                    hass, entry.entry_id, legacy_link
+                )
+                if imported:
+                    _LOGGER.info(
+                        "Migrated entry %s: imported blocks from %s",
+                        entry.title,
+                        legacy_link,
+                    )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Migration from %s failed: %s", legacy_link, err
+                )
+            # Drop the legacy key from options so it doesn't mislead
+            # future code paths.
+            new_options = {
+                k: v for k, v in entry.options.items() if k != CONF_LINKED_SCHEDULE
+            }
+            if new_options != entry.options:
+                hass.config_entries.async_update_entry(entry, options=new_options)
 
     await hass.config_entries.async_forward_entry_setups(
         entry, _platforms_for(entry)
@@ -183,18 +306,9 @@ async def async_remove_entry(
     if entry_type != ENTRY_TYPE_SCHEDULE:
         return
 
-    linked = entry.options.get(CONF_LINKED_SCHEDULE) or entry.data.get(
-        CONF_LINKED_SCHEDULE
-    )
-    if not linked:
-        return
     try:
-        removed = await async_remove_linked_schedule(hass, linked)
-        if removed:
-            _LOGGER.info(
-                "Removed auto-linked schedule helper %s after entry %s deletion",
-                linked,
-                entry.title,
-            )
+        await async_delete_storage_entry(hass, entry.entry_id)
     except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Failed to remove linked schedule %s: %s", linked, err)
+        _LOGGER.warning(
+            "Failed to clean up schedule blocks for %s: %s", entry.title, err
+        )

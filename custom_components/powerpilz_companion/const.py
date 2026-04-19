@@ -5,10 +5,12 @@ DOMAIN = "powerpilz_companion"
 
 # --- Entry-type discriminator ---
 # The integration hosts two helper kinds sharing the same domain:
-#   - ENTRY_TYPE_SCHEDULE: a `select` entity with 3 modes, linked to a
-#     native HA schedule helper
+#   - ENTRY_TYPE_SCHEDULE: a `select` entity with 3 modes + a
+#     `binary_sensor` exposing the current schedule-active state.
+#     Blocks are stored by the integration itself; no external
+#     `schedule.*` helper is involved anymore (v0.4+).
 #   - ENTRY_TYPE_TIMER: a `switch` entity with attached on/off datetimes
-#     that drives the target device autonomously
+#     that drives the target device autonomously.
 
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_SCHEDULE = "schedule"
@@ -58,9 +60,10 @@ DEFAULT_STATE_INACTIVE_ICON = "mdi:timer-outline"
 DEFAULT_STATE_ACTIVE_NAME = "Running"
 DEFAULT_STATE_ACTIVE_ICON = "mdi:timer-play-outline"
 
-# Entity_id of the native HA Schedule helper that this Smart Schedule tracks.
-# Editing of the actual weekly schedule happens in that schedule helper's
-# native drag-and-drop UI — we only observe its on/off state.
+# Legacy v0.3 config key: entity_id of a native HA Schedule helper that
+# Smart Schedule used to mirror. v0.4+ manages its own blocks; kept here
+# purely so the migration step in `__init__.async_setup_entry` can
+# detect and import blocks from such a pre-migration schedule helper.
 CONF_LINKED_SCHEDULE = "linked_schedule"
 
 CONF_MODE_OFF_NAME = "mode_off_name"
@@ -95,14 +98,29 @@ LOGICAL_MODES = (MODE_OFF, MODE_ON, MODE_AUTO)
 
 # --- Entity attributes ---
 
+# Smart Schedule (select) entity attributes
 ATTR_LOGICAL_MODE = "logical_mode"
 ATTR_TARGET_ENTITY = "target_entity"
 ATTR_TARGET_STATE = "target_state"
-ATTR_LINKED_SCHEDULE = "linked_schedule"
-ATTR_SCHEDULE_STATE = "schedule_state"
 ATTR_MODE_ICONS = "mode_icons"
 ATTR_MODE_NAMES = "mode_names"
+# Schedule-state exposed by both the select and the accompanying
+# binary_sensor. `next_event` mirrors HA's native `schedule.*` attribute
+# naming so templates that referenced the old linked schedule keep
+# working with minimal changes.
+ATTR_SCHEDULE_ACTIVE = "schedule_active"
 ATTR_NEXT_EVENT = "next_event"
+ATTR_NEXT_START = "next_start"
+ATTR_NEXT_END = "next_end"
+ATTR_CURRENT_WINDOW = "current_window"
+ATTR_TODAY_BLOCKS = "today_blocks"
+ATTR_WEEK_BLOCKS = "week_blocks"
+# Retained for card compatibility — points at the companion entity itself
+# so legacy cards can still find the "schedule entity". New cards should
+# just read blocks from week_blocks directly.
+ATTR_COMPANION_ENTITY = "companion_entity"
+
+# Smart Timer (switch) entity attributes
 ATTR_ON_DATETIME = "on_datetime"
 ATTR_OFF_DATETIME = "off_datetime"
 ATTR_DIRECTION = "direction"
@@ -120,3 +138,25 @@ ATTR_OFF_OPTION_LABEL = "off_option_label"
 # --- Services ---
 
 SERVICE_SET_TIMER = "set_timer"
+SERVICE_SET_SCHEDULE_BLOCKS = "set_schedule_blocks"
+
+# --- Storage ---
+
+# Own JSON store under `.storage/powerpilz_companion.schedules` carrying
+# all Smart Schedule weekly blocks, keyed by config entry id. Separate
+# from config_entries so rapid edits don't churn the entry registry.
+STORAGE_VERSION = 1
+STORAGE_KEY = f"{DOMAIN}.schedules"
+
+# Canonical weekday keys used in all block payloads (attributes, store,
+# service calls, card). Identical to what HA's native schedule helper
+# used to emit — drop-in for templates that referenced it.
+WEEKDAY_KEYS = (
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)

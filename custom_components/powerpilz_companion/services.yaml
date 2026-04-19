@@ -39,3 +39,24 @@ set_timer:
       required: false
       selector:
         text:
+
+set_schedule_blocks:
+  name: Set Smart Schedule weekly blocks
+  description: >-
+    Replace the weekly schedule blocks of a Smart Schedule helper. Used
+    primarily by the PowerPilz Schedule card; you can also call it from
+    automations to e.g. rotate between seasonal schedules.
+  target:
+    entity:
+      integration: powerpilz_companion
+      domain: select
+  fields:
+    blocks:
+      name: Weekly blocks
+      description: >-
+        Dict keyed by weekday (`monday`…`sunday`); each value is a list
+        of `{from, to, data?}` entries. Times are `HH:MM:SS` (24:00:00
+        allowed as end-of-day). Existing blocks are replaced entirely.
+      required: true
+      selector:
+        object:
