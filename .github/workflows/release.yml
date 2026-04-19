@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    branches: ["release"]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate manifest
+        id: version
+        run: |
+          version="$(python -c "import json; print(json.load(open('custom_components/powerpilz_companion/manifest.json'))['version'])")"
+          if [[ -z "$version" ]]; then
+            echo "manifest.json version is empty."
+            exit 1
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid manifest.json version: $version"
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "Release tag will be: v$version"
+
+      - name: Ensure tag is new
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists. Bump manifest.json version before merging to release."
+            exit 1
+          fi
+
+      - name: Package integration
+        run: |
+          # HACS pulls the integration content from the repo tree at the tag,
+          # but we also attach a convenience zip with the custom_components
+          # subtree so manual installers can grab it in one click.
+          cd custom_components
+          zip -r ../powerpilz_companion.zip powerpilz_companion
+          cd ..
+          ls -lh powerpilz_companion.zip
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          prerelease: false
+          draft: false
+          generate_release_notes: true
+          files: powerpilz_companion.zip

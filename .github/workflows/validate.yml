@@ -1,0 +1,71 @@
+name: Validate
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  syntax:
+    name: Python + JSON syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax
+        run: |
+          python -c "
+          import ast, pathlib
+          for p in pathlib.Path('custom_components/powerpilz_companion').rglob('*.py'):
+            ast.parse(p.read_text(), filename=str(p))
+            print(f'  OK  {p}')
+          "
+
+      - name: Validate JSON payloads
+        run: |
+          python -c "
+          import json, pathlib
+          for p in pathlib.Path('custom_components/powerpilz_companion').rglob('*.json'):
+            json.loads(p.read_text())
+            print(f'  OK  {p}')
+          "
+
+      - name: Validate services.yaml
+        run: |
+          python -c "
+          import yaml, pathlib
+          p = pathlib.Path('custom_components/powerpilz_companion/services.yaml')
+          if p.exists():
+            yaml.safe_load(p.read_text())
+            print(f'  OK  {p}')
+          else:
+            print('  (no services.yaml)')
+          "
+
+  hacs:
+    name: HACS metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate with HACS action
+        uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate with Hassfest
+        uses: home-assistant/actions/hassfest@master

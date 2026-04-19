@@ -175,6 +175,11 @@ The [PowerPilz](https://github.com/gregor-autischer/PowerPilz) repository provid
 
 **Using only the Companion (without the Cards)** also works — the Smart helpers are regular HA entities that appear in Auto-generated dashboards, can be triggered from automations/voice assistants, and can be controlled with any `select`/`switch` capable card.
 
+## Development & releases
+
+- Contributions welcome — open an issue or PR on [GitHub](https://github.com/gregor-autischer/PowerPilz-Companion).
+- See [RELEASING.md](RELEASING.md) for the full release procedure (version bump, `main → release` fast-forward merge, and troubleshooting).
+
 ## License
 
-Apache-2.0
+Apache-2.0 — see [LICENSE](LICENSE).
