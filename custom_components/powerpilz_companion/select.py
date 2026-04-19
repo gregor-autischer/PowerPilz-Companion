@@ -115,10 +115,6 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
         self._logical_mode: str = MODE_AUTO
         self._last_schedule_state: str | None = None
 
-        # Track whether a pending target state change was issued by us, so we
-        # can distinguish it from genuine manual overrides if we ever want to.
-        self._expected_target_state: str | None = None
-
         self._attr_options = [
             self._mode_names[MODE_OFF],
             self._mode_names[MODE_ON],
@@ -324,7 +320,6 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
             service,
             reason,
         )
-        self._expected_target_state = desired
         try:
             await self.hass.services.async_call(
                 "homeassistant",

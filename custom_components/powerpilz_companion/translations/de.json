@@ -101,7 +101,7 @@
       },
       "timer": {
         "title": "Smart Timer Einstellungen",
-        "description": "Bearbeite die Helfer-Einstellungen. Die Ein/Aus-Zeiten werden über die PowerPilz Timer-Karte auf dem Dashboard gesetzt.",
+        "description": "Bearbeite die Helfer-Einstellungen. Die Ein/Aus-Zeiten werden über die PowerPilz Timer-Karte auf dem Dashboard gesetzt. Wenn das Target eine Select-Entität ist, wird als nächstes gefragt, welche Option an jeder Grenze gesetzt werden soll.",
         "data": {
           "name": "Name",
           "target_entity": "Zu steuerndes Gerät",

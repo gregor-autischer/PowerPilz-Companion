@@ -189,14 +189,13 @@ class SmartTimerSwitch(SwitchEntity, RestoreEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         target = self.hass.states.get(self._target_entity)
+        next_event = self._next_event()
         return {
             ATTR_TARGET_ENTITY: self._target_entity,
             ATTR_TARGET_STATE: target.state if target else None,
             ATTR_ON_DATETIME: self._on_dt.isoformat() if self._on_dt else None,
             ATTR_OFF_DATETIME: self._off_dt.isoformat() if self._off_dt else None,
-            ATTR_NEXT_EVENT: (
-                self._next_event().isoformat() if self._next_event() else None
-            ),
+            ATTR_NEXT_EVENT: next_event.isoformat() if next_event else None,
             ATTR_DIRECTION: self._direction,
             ATTR_STATE_NAMES: dict(self._state_names),
             ATTR_STATE_ICONS: dict(self._state_icons),
@@ -395,7 +394,6 @@ class SmartTimerSwitch(SwitchEntity, RestoreEntity):
                 "Failed to %s %s: %s", service, self._target_entity, err
             )
 
-    # Back-compat shim methods used by the existing fire handlers.
     async def _turn_target_on(self, reason: str) -> None:
         await self._apply_target_action("on", reason)
 
