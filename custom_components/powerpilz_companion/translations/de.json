@@ -7,7 +7,8 @@
         "description": "Welche Art von Helfer möchtest du anlegen?",
         "menu_options": {
           "schedule": "Smart Zeitschaltuhr — Wochenplan mit Modus-Override",
-          "timer": "Smart Timer — einmaliges Ein/Aus zu einer bestimmten Zeit"
+          "timer": "Smart Timer — einmaliges Ein/Aus zu einer bestimmten Zeit",
+          "curve": "Smart Heizkurve — Wochenkurve mit Sollwert-Verlauf"
         }
       },
       "schedule": {
@@ -67,10 +68,40 @@
           "on_option": "Die Option, die zur Startzeit gesetzt wird.",
           "off_option": "Die Option, die zur Endzeit gesetzt wird."
         }
+      },
+      "curve": {
+        "title": "Smart Heizkurve",
+        "description": "Steuert ein oder mehrere Heizungs-Targets über eine Wochenkurve mit Sollwerten. Die Kurve wird in der PowerPilz Heizkurven-Karte auf dem Dashboard bearbeitet — lange auf die Karte drücken öffnet den Editor.\n\nIm Auto-Modus tastet der Helfer die Kurve im konfigurierten Intervall ab und schreibt den Wert an alle Targets (climate → set_temperature, number → set_value). Der Ein-Modus schreibt einen festen Boost-Wert; der Aus-Modus schaltet climate-Targets aus.",
+        "data": {
+          "name": "Name",
+          "target_entities": "Heizungs-Targets",
+          "update_interval_minutes": "Update-Intervall (Minuten)",
+          "value_min": "Wertebereich — Minimum",
+          "value_max": "Wertebereich — Maximum",
+          "unit": "Einheit",
+          "mode_on_value": "Boost-Wert im Ein-Modus",
+          "same_for_all_days": "Jeden Tag gleiche Kurve",
+          "mode_off_name": "Aus-Modus — Name",
+          "mode_off_icon": "Aus-Modus — Symbol",
+          "mode_on_name": "Ein-Modus — Name",
+          "mode_on_icon": "Ein-Modus — Symbol",
+          "mode_auto_name": "Auto-Modus — Name",
+          "mode_auto_icon": "Auto-Modus — Symbol"
+        },
+        "data_description": {
+          "target_entities": "Climate- oder Number-Entitäten, an die die Kurve den Sollwert schreibt. Derselbe Wert wird an alle Targets gesendet.",
+          "update_interval_minutes": "Wie oft die Kurve abgetastet und an die Targets übertragen wird. Standard 15 Minuten.",
+          "value_min": "Untere Grenze der Editor-Y-Achse und Wert-Begrenzung.",
+          "value_max": "Obere Grenze der Editor-Y-Achse und Wert-Begrenzung.",
+          "mode_on_value": "Konstanter Wert, der im Ein-Modus geschrieben wird.",
+          "same_for_all_days": "Wenn aktiviert, zeigt der Editor nur einen Tag; die Kurve gilt dann für jeden Wochentag."
+        }
       }
     },
     "error": {
-      "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein."
+      "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein.",
+      "targets_required": "Mindestens ein Heizungs-Target wählen.",
+      "invalid_range": "Maximum muss größer als Minimum sein."
     },
     "abort": {
       "already_configured": "Diese Konfiguration ist bereits eingerichtet."
@@ -128,10 +159,32 @@
           "on_option": "Die Option, die zur Startzeit gesetzt wird.",
           "off_option": "Die Option, die zur Endzeit gesetzt wird."
         }
+      },
+      "curve": {
+        "title": "Smart Heizkurve Einstellungen",
+        "description": "Bearbeite die Helfer-Einstellungen. Die Kurve selbst wird in der PowerPilz Heizkurven-Karte auf dem Dashboard bearbeitet — lange auf die Karte drücken öffnet den Editor.",
+        "data": {
+          "name": "Name",
+          "target_entities": "Heizungs-Targets",
+          "update_interval_minutes": "Update-Intervall (Minuten)",
+          "value_min": "Wertebereich — Minimum",
+          "value_max": "Wertebereich — Maximum",
+          "unit": "Einheit",
+          "mode_on_value": "Boost-Wert im Ein-Modus",
+          "same_for_all_days": "Jeden Tag gleiche Kurve",
+          "mode_off_name": "Aus-Modus — Name",
+          "mode_off_icon": "Aus-Modus — Symbol",
+          "mode_on_name": "Ein-Modus — Name",
+          "mode_on_icon": "Ein-Modus — Symbol",
+          "mode_auto_name": "Auto-Modus — Name",
+          "mode_auto_icon": "Auto-Modus — Symbol"
+        }
       }
     },
     "error": {
-      "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein."
+      "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein.",
+      "targets_required": "Mindestens ein Heizungs-Target wählen.",
+      "invalid_range": "Maximum muss größer als Minimum sein."
     }
   },
   "services": {
@@ -163,7 +216,21 @@
         },
         "blocks": {
           "name": "Wochenplan-Blöcke",
-          "description": "Dict mit Wochentagen als Keys; jeder Wert ist eine Liste von {from, to, data?}-Einträgen."
+          "description": "Pro Wochentag eine Liste von Zeitblöcken. Jeder Eintrag hat `from`- und `to`-Zeiten (HH:MM:SS) und optional `data`."
+        }
+      }
+    },
+    "set_curve_points": {
+      "name": "Smart Heizkurve Wochenpunkte setzen",
+      "description": "Ersetzt die Wochenpunkte einer Smart-Heizkurve.",
+      "fields": {
+        "entity_id": {
+          "name": "Entität",
+          "description": "Die Smart-Heizkurven-Select-Entität."
+        },
+        "points": {
+          "name": "Wochenpunkte",
+          "description": "Pro Wochentag eine Liste von Kurvenpunkten. Jeder Eintrag hat eine `time` (HH:MM:SS) und einen numerischen `value`."
         }
       }
     }

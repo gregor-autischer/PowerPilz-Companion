@@ -54,9 +54,30 @@ set_schedule_blocks:
     blocks:
       name: Weekly blocks
       description: >-
-        Dict keyed by weekday (`monday`…`sunday`); each value is a list
-        of `{from, to, data?}` entries. Times are `HH:MM:SS` (24:00:00
-        allowed as end-of-day). Existing blocks are replaced entirely.
+        Per-weekday list of time blocks (keys `monday`…`sunday`). Each
+        entry has `from` and `to` times (`HH:MM:SS`, with `24:00:00`
+        allowed as end-of-day) plus an optional `data` payload.
+        Existing blocks are replaced entirely.
+      required: true
+      selector:
+        object:
+
+set_curve_points:
+  name: Set Smart Curve weekly points
+  description: >-
+    Replace the weekly curve points of a Smart Curve helper. Used
+    primarily by the PowerPilz Heating Curve card.
+  target:
+    entity:
+      integration: powerpilz_companion
+      domain: select
+  fields:
+    points:
+      name: Weekly points
+      description: >-
+        Per-weekday list of curve points (keys `monday`…`sunday`). Each
+        entry has a `time` (`HH:MM:SS`) and a numeric `value` (float).
+        Existing points are replaced entirely.
       required: true
       selector:
         object:

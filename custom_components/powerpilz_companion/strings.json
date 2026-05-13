@@ -7,7 +7,8 @@
         "description": "Pick the kind of helper you want to create.",
         "menu_options": {
           "schedule": "Smart Schedule — weekly plan with mode override",
-          "timer": "Smart Timer — one-shot on/off at a specific time"
+          "timer": "Smart Timer — one-shot on/off at a specific time",
+          "curve": "Smart Curve — heating curve with weekly setpoint shape"
         }
       },
       "schedule": {
@@ -67,10 +68,40 @@
           "on_option": "The option to apply at the start time.",
           "off_option": "The option to apply at the end time."
         }
+      },
+      "curve": {
+        "title": "Smart Curve",
+        "description": "Drives one or more heating targets with a weekly value curve. Edit the curve in the PowerPilz Heating Curve card on your dashboard — long-press the card to open the editor.\n\nIn Auto mode the helper samples the curve at the configured cadence and writes the result to every target (climate → set_temperature, number → set_value). On mode forces a fixed boost value; Off turns climate targets off.",
+        "data": {
+          "name": "Name",
+          "target_entities": "Heating targets",
+          "update_interval_minutes": "Update interval (minutes)",
+          "value_min": "Curve range — minimum",
+          "value_max": "Curve range — maximum",
+          "unit": "Unit",
+          "mode_on_value": "On mode boost value",
+          "same_for_all_days": "Same curve every day",
+          "mode_off_name": "Off mode — name",
+          "mode_off_icon": "Off mode — icon",
+          "mode_on_name": "On mode — name",
+          "mode_on_icon": "On mode — icon",
+          "mode_auto_name": "Auto mode — name",
+          "mode_auto_icon": "Auto mode — icon"
+        },
+        "data_description": {
+          "target_entities": "Climate or number entities the curve writes to. The same value is applied to every target.",
+          "update_interval_minutes": "How often the curve is sampled and the targets are updated. Default 15 minutes.",
+          "value_min": "Lower bound of the editor Y-axis and the value clamp.",
+          "value_max": "Upper bound of the editor Y-axis and the value clamp.",
+          "mode_on_value": "Constant value written while the helper is in On mode.",
+          "same_for_all_days": "When enabled the editor only shows one day; the curve is mirrored across all weekdays."
+        }
       }
     },
     "error": {
-      "duplicate_mode_names": "The three mode names must be different."
+      "duplicate_mode_names": "The three mode names must be different.",
+      "targets_required": "Pick at least one heating target.",
+      "invalid_range": "Maximum must be greater than minimum."
     },
     "abort": {
       "already_configured": "This configuration is already set up."
@@ -128,10 +159,32 @@
           "on_option": "The option to apply at the start time.",
           "off_option": "The option to apply at the end time."
         }
+      },
+      "curve": {
+        "title": "Smart Curve options",
+        "description": "Adjust the helper settings. The curve itself is edited in the PowerPilz Heating Curve card on your dashboard — long-press the card to open the editor.",
+        "data": {
+          "name": "Name",
+          "target_entities": "Heating targets",
+          "update_interval_minutes": "Update interval (minutes)",
+          "value_min": "Curve range — minimum",
+          "value_max": "Curve range — maximum",
+          "unit": "Unit",
+          "mode_on_value": "On mode boost value",
+          "same_for_all_days": "Same curve every day",
+          "mode_off_name": "Off mode — name",
+          "mode_off_icon": "Off mode — icon",
+          "mode_on_name": "On mode — name",
+          "mode_on_icon": "On mode — icon",
+          "mode_auto_name": "Auto mode — name",
+          "mode_auto_icon": "Auto mode — icon"
+        }
       }
     },
     "error": {
-      "duplicate_mode_names": "The three mode names must be different."
+      "duplicate_mode_names": "The three mode names must be different.",
+      "targets_required": "Pick at least one heating target.",
+      "invalid_range": "Maximum must be greater than minimum."
     }
   },
   "services": {
@@ -163,7 +216,21 @@
         },
         "blocks": {
           "name": "Weekly blocks",
-          "description": "Dict keyed by weekday; each value is a list of {from, to, data?} entries."
+          "description": "Per-weekday list of time blocks. Each entry has `from` and `to` times (HH:MM:SS) plus an optional `data` payload."
+        }
+      }
+    },
+    "set_curve_points": {
+      "name": "Set Smart Curve weekly points",
+      "description": "Replace the weekly curve points of a Smart Curve helper.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "The Smart Curve select entity."
+        },
+        "points": {
+          "name": "Weekly points",
+          "description": "Per-weekday list of curve points. Each entry has a `time` (HH:MM:SS) and a numeric `value`."
         }
       }
     }
