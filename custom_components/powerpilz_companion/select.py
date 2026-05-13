@@ -44,6 +44,7 @@ from .const import (
     ATTR_NEXT_END,
     ATTR_NEXT_EVENT,
     ATTR_NEXT_START,
+    ATTR_PULSE_BLOCKED_UNTIL,
     ATTR_PULSE_DURATION,
     ATTR_PULSE_RUNNING,
     ATTR_SCHEDULE_ACTIVE,
@@ -271,6 +272,11 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
                 ATTR_EVENT_ACTION: self._event_action,
                 ATTR_PULSE_DURATION: self._pulse_duration,
                 ATTR_PULSE_RUNNING: self._pulse_running,
+                ATTR_PULSE_BLOCKED_UNTIL: (
+                    self._pulse_blocked_until.isoformat()
+                    if self._pulse_blocked_until is not None
+                    else None
+                ),
                 ATTR_NEXT_EVENT: next_event_dt.isoformat() if next_event_dt else None,
                 ATTR_TODAY_EVENTS: self._events_for_today(),
                 ATTR_WEEK_EVENTS: self._events,
@@ -687,11 +693,16 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
         return True
 
     async def _run_pulse(self, reason: str) -> None:
-        """Turn the target on, wait pulse_duration seconds, turn it off.
+        """Turn the target on, wait pulse_duration seconds, turn it off,
+        then keep the cool-down window armed for PULSE_COOL_DOWN_SECONDS.
 
-        Sets a cool-down window (= pulse_duration + 10s) during which any
-        other trigger is silently dropped. The pulse itself is best-effort
-        — failures are logged but do not propagate.
+        During pulse + cool-down any other trigger (scheduled or manual)
+        is silently dropped by `_trigger_event`. State writes happen at
+        three boundaries so the card can disable/enable the trigger
+        button accurately:
+          - pulse start  → pulse_running=True, blocked_until set
+          - pulse end    → pulse_running=False, blocked_until still set
+          - cool-down end → blocked_until cleared
         """
         duration = max(1, int(self._pulse_duration or DEFAULT_PULSE_DURATION))
         end_at = dt_util.now() + timedelta(seconds=duration + PULSE_COOL_DOWN_SECONDS)
@@ -723,9 +734,20 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
             _LOGGER.warning(
                 "Smart Schedule %s: pulse failed: %s", self.entity_id, err
             )
-        finally:
-            self._pulse_running = False
-            self.async_write_ha_state()
+
+        # Pulse itself is done; remaining time is the cool-down.
+        self._pulse_running = False
+        self.async_write_ha_state()
+
+        try:
+            await asyncio.sleep(PULSE_COOL_DOWN_SECONDS)
+        except asyncio.CancelledError:
+            return
+
+        # New pulses can't have overwritten this window (they'd have been
+        # dropped while blocked), so it's safe to clear unconditionally.
+        self._pulse_blocked_until = None
+        self.async_write_ha_state()
 
     async def _call_custom_event_service(self, reason: str) -> None:
         """Fire the user-configured custom service for this event."""

@@ -169,6 +169,10 @@ ATTR_SCHEDULE_KIND = "schedule_kind"
 ATTR_EVENT_ACTION = "event_action"
 ATTR_PULSE_DURATION = "pulse_duration_seconds"
 ATTR_PULSE_RUNNING = "pulse_running"
+# ISO timestamp until which any trigger (auto or manual) is dropped.
+# Spans the pulse itself + the fixed cool-down window. None when no
+# pulse is running / cooling down.
+ATTR_PULSE_BLOCKED_UNTIL = "pulse_blocked_until"
 ATTR_TODAY_EVENTS = "today_events"
 ATTR_WEEK_EVENTS = "week_events"
 # Retained for card compatibility — points at the companion entity itself
