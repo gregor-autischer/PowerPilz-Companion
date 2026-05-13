@@ -215,17 +215,6 @@ Pure `async_track_point_in_time` callbacks at the on/off datetimes. No polling. 
 
 For select / input_select targets the timer calls `<domain>.select_option`. When the target exposes a `mode_names` attribute (as the Smart Schedule's select does) the timer stores the **logical key** (`off` / `on` / `auto`) rather than the display name, and resolves to the current display name via `mode_names` at fire time - renaming a mode in the Schedule helper therefore doesn't break the timer binding.
 
-## Migration from v0.3.x
-
-v0.4.0 drops the dependency on a linked native `schedule.*` helper. Existing Smart Schedule entries migrate automatically on first startup after the upgrade:
-
-1. The weekly blocks are read from the linked `schedule.*` entity.
-2. They are imported into the new internal Store.
-3. The orphaned `schedule.*` entity is deleted from HA's storage.
-4. The `linked_schedule` config option is removed from the entry.
-
-After the migration your Smart Schedule select continues to work with the same `entity_id`; no dashboard or automation changes required beyond switching state-triggered automations from `schedule.*` to the new `binary_sensor.*_active`.
-
 ## Development & releases
 
 - Contributions welcome - open an issue or PR on [GitHub](https://github.com/gregor-autischer/PowerPilz-Companion).
