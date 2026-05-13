@@ -13,27 +13,37 @@
       },
       "schedule": {
         "title": "Smart Zeitschaltuhr",
-        "description": "Verbindet ein Zielgerät, drei Modi (Aus / Ein / Auto) und einen Wochenplan in einem Helfer.\n\nDer Wochenplan wird direkt in der PowerPilz-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet — lange auf die Karte drücken öffnet den Wochen-Editor. Die Blöcke werden von dieser Integration selbst gespeichert; ein zusätzlicher Zeitplan-Helfer ist nicht nötig.\n\nZu diesem Helfer gehört ein begleitender `binary_sensor`, dessen Zustand anzeigt, ob der Zeitplan gerade aktiv ist — direkt nutzbar als Trigger in Automationen, wie ein nativer Zeitplan-Helfer.",
+        "description": "Verbindet ein Zielgerät, Modi und einen Wochenplan in einem Helfer.\n\nZwei Modi:\n• Blöcke - wöchentliche Zeitfenster (Gerät an während der Fenster, aus dazwischen).\n• Events - Zeitpunkt-Trigger (jedes Event löst Toggle / Pulse / einen eigenen Service aus).\n\nDer Wochenplan wird direkt in der PowerPilz-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet - lange auf die Karte drücken öffnet den Wochen-Editor.",
         "data": {
           "name": "Name",
           "target_entity": "Zu steuerndes Gerät",
-          "mode_off_name": "Aus-Modus — Name",
-          "mode_off_icon": "Aus-Modus — Symbol",
-          "mode_on_name": "Ein-Modus — Name",
-          "mode_on_icon": "Ein-Modus — Symbol",
-          "mode_auto_name": "Auto-Modus — Name",
-          "mode_auto_icon": "Auto-Modus — Symbol",
+          "schedule_kind": "Zeitplan-Typ",
+          "event_action": "Event-Aktion (Event-Modus)",
+          "pulse_duration_seconds": "Pulse-Dauer (Sekunden)",
+          "event_service": "Eigener Service (Event-Modus)",
+          "event_service_data": "Service-Daten",
+          "mode_off_name": "Aus-Modus - Name",
+          "mode_off_icon": "Aus-Modus - Symbol",
+          "mode_on_name": "Ein-Modus - Name",
+          "mode_on_icon": "Ein-Modus - Symbol",
+          "mode_auto_name": "Auto-Modus - Name",
+          "mode_auto_icon": "Auto-Modus - Symbol",
           "restore_auto_on_boundary": "Auto bei nächster Zeitplan-Grenze wiederherstellen"
         },
         "data_description": {
-          "target_entity": "Der Switch, das Licht oder input_boolean, das dieser Helfer im Auto-Modus automatisch ein-/ausschaltet.",
-          "mode_off_name": "Anzeigename für den Aus-Modus (Gerät immer aus).",
+          "target_entity": "Der Switch, das Licht oder input_boolean, das dieser Helfer steuert (Blöcke-Modus) bzw. bei jedem Event auslöst (Event-Modus).",
+          "schedule_kind": "Blöcke: klassischer Wochenplan mit Ein/Aus-Grenzen. Events: wöchentliche Zeitpunkt-Trigger, jeder löst die gewählte Aktion aus.",
+          "event_action": "Was jedes Event tut. Toggle ruft homeassistant.toggle. Pulse: an, warten, aus. Eigener Service: beliebiger Service-Call.",
+          "pulse_duration_seconds": "Sekunden, die das Ziel beim Pulse an bleibt (1-900). Eine feste 10s-Cool-Down-Phase nach jedem Pulse verwirft überlappende Trigger.",
+          "event_service": "Service, der im Event+Custom-Modus aufgerufen wird, z.B. scene.turn_on oder notify.mobile_app_x.",
+          "event_service_data": "Optionale Service-Daten als Dict. entity_id wird automatisch aus dem Ziel oben gefüllt.",
+          "mode_off_name": "Anzeigename für den Aus-Modus.",
           "mode_off_icon": "Symbol im Aus-Modus.",
-          "mode_on_name": "Anzeigename für den Ein-Modus (Gerät immer an).",
+          "mode_on_name": "Anzeigename für den Ein-Modus (nur Blöcke-Modus).",
           "mode_on_icon": "Symbol im Ein-Modus.",
-          "mode_auto_name": "Anzeigename für den Auto-Modus (Gerät folgt dem Wochenplan).",
+          "mode_auto_name": "Anzeigename für den Auto-Modus.",
           "mode_auto_icon": "Symbol im Auto-Modus.",
-          "restore_auto_on_boundary": "Wenn aktiviert, wird ein manueller Ein/Aus-Override bei der nächsten Zeitplan-Grenze automatisch aufgehoben."
+          "restore_auto_on_boundary": "Nur Blöcke-Modus: ein manueller Ein/Aus-Override wird bei der nächsten Zeitplan-Grenze automatisch aufgehoben."
         }
       },
       "timer": {
@@ -101,7 +111,9 @@
     "error": {
       "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein.",
       "targets_required": "Mindestens ein Heizungs-Target wählen.",
-      "invalid_range": "Maximum muss größer als Minimum sein."
+      "invalid_range": "Maximum muss größer als Minimum sein.",
+      "invalid_event_service": "Eigener Service muss wie `domain.service` aussehen.",
+      "invalid_event_service_data": "Service-Daten müssen ein Dict sein."
     },
     "abort": {
       "already_configured": "Diese Konfiguration ist bereits eingerichtet."
@@ -111,20 +123,29 @@
     "step": {
       "schedule": {
         "title": "Smart Zeitschaltuhr Einstellungen",
-        "description": "Bearbeite die Helfer-Einstellungen. Der Wochenplan selbst wird in der PowerPilz-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet — lange auf die Karte drücken öffnet den Wochen-Editor.",
+        "description": "Bearbeite die Helfer-Einstellungen. Der Wochenplan selbst wird in der PowerPilz-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet - lange auf die Karte drücken öffnet den Wochen-Editor.",
         "data": {
           "name": "Name",
           "target_entity": "Zu steuerndes Gerät",
-          "mode_off_name": "Aus-Modus — Name",
-          "mode_off_icon": "Aus-Modus — Symbol",
-          "mode_on_name": "Ein-Modus — Name",
-          "mode_on_icon": "Ein-Modus — Symbol",
-          "mode_auto_name": "Auto-Modus — Name",
-          "mode_auto_icon": "Auto-Modus — Symbol",
+          "schedule_kind": "Zeitplan-Typ",
+          "event_action": "Event-Aktion (Event-Modus)",
+          "pulse_duration_seconds": "Pulse-Dauer (Sekunden)",
+          "event_service": "Eigener Service (Event-Modus)",
+          "event_service_data": "Service-Daten",
+          "mode_off_name": "Aus-Modus - Name",
+          "mode_off_icon": "Aus-Modus - Symbol",
+          "mode_on_name": "Ein-Modus - Name",
+          "mode_on_icon": "Ein-Modus - Symbol",
+          "mode_auto_name": "Auto-Modus - Name",
+          "mode_auto_icon": "Auto-Modus - Symbol",
           "restore_auto_on_boundary": "Auto bei nächster Zeitplan-Grenze wiederherstellen"
         },
         "data_description": {
-          "target_entity": "Der Switch, das Licht oder input_boolean, das dieser Helfer im Auto-Modus steuert."
+          "target_entity": "Der Switch, das Licht oder input_boolean, das dieser Helfer steuert.",
+          "schedule_kind": "Blöcke (Zeitfenster) oder Events (Zeitpunkt-Trigger).",
+          "event_action": "Was jedes Event im Event-Modus tut.",
+          "pulse_duration_seconds": "Sekunden, die das Ziel beim Pulse an bleibt (1-900).",
+          "event_service": "Service, der im Event+Custom-Modus aufgerufen wird."
         }
       },
       "timer": {
@@ -184,7 +205,9 @@
     "error": {
       "duplicate_mode_names": "Die drei Modus-Namen müssen unterschiedlich sein.",
       "targets_required": "Mindestens ein Heizungs-Target wählen.",
-      "invalid_range": "Maximum muss größer als Minimum sein."
+      "invalid_range": "Maximum muss größer als Minimum sein.",
+      "invalid_event_service": "Eigener Service muss wie `domain.service` aussehen.",
+      "invalid_event_service_data": "Service-Daten müssen ein Dict sein."
     }
   },
   "services": {
@@ -231,6 +254,30 @@
         "points": {
           "name": "Wochenpunkte",
           "description": "Pro Wochentag eine Liste von Kurvenpunkten. Jeder Eintrag hat eine `time` (HH:MM:SS) und einen numerischen `value`."
+        }
+      }
+    },
+    "set_schedule_events": {
+      "name": "Smart Zeitschaltuhr Wochen-Events setzen",
+      "description": "Ersetzt die Wochen-Events eines Smart-Zeitschaltuhr-Helfers im Event-Modus.",
+      "fields": {
+        "entity_id": {
+          "name": "Entität",
+          "description": "Die Smart-Zeitschaltuhr-Select-Entität."
+        },
+        "events": {
+          "name": "Wochen-Events",
+          "description": "Pro Wochentag eine Liste von Events. Jeder Eintrag hat eine `time` (HH:MM:SS) und optional `data`."
+        }
+      }
+    },
+    "trigger_event_now": {
+      "name": "Smart Zeitschaltuhr Event jetzt auslösen",
+      "description": "Löst die konfigurierte Event-Aktion manuell aus (Auto- und Aus-Modus). Während Pulse-Cool-Down werden Trigger verworfen.",
+      "fields": {
+        "entity_id": {
+          "name": "Entität",
+          "description": "Die Smart-Zeitschaltuhr-Select-Entität."
         }
       }
     }

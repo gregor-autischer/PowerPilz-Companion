@@ -94,6 +94,37 @@ CONF_MODE_AUTO_ICON = "mode_auto_icon"
 
 CONF_RESTORE_AUTO_ON_BOUNDARY = "restore_auto_on_boundary"
 
+# --- Smart Schedule kind (blocks vs events) ---
+# A Smart Schedule helper operates in one of two modes:
+#   - blocks: weekly time windows; target is on during windows, off
+#             outside. Default and backwards-compatible.
+#   - events: weekly point-in-time triggers; each event fires a
+#             configured action on the target. No on/off state.
+CONF_SCHEDULE_KIND = "schedule_kind"
+SCHEDULE_KIND_BLOCKS = "blocks"
+SCHEDULE_KIND_EVENTS = "events"
+DEFAULT_SCHEDULE_KIND = SCHEDULE_KIND_BLOCKS
+
+# Event action — what happens at each event firing time.
+CONF_EVENT_ACTION = "event_action"
+EVENT_ACTION_TOGGLE = "toggle"     # one homeassistant.toggle on target
+EVENT_ACTION_PULSE = "pulse"       # turn_on → wait N sec → turn_off
+EVENT_ACTION_CUSTOM = "custom"     # arbitrary service call
+DEFAULT_EVENT_ACTION = EVENT_ACTION_TOGGLE
+
+# Pulse settings (only meaningful when event_action == pulse).
+CONF_PULSE_DURATION = "pulse_duration_seconds"
+DEFAULT_PULSE_DURATION = 30
+MIN_PULSE_DURATION = 1
+MAX_PULSE_DURATION = 900  # 15 min
+# Fixed cool-down after a pulse turn_off — any new trigger during the
+# pulse-running window OR within this cool-down is silently dropped.
+PULSE_COOL_DOWN_SECONDS = 10
+
+# Custom event action settings (only when event_action == custom).
+CONF_EVENT_SERVICE = "event_service"            # e.g. "scene.turn_on"
+CONF_EVENT_SERVICE_DATA = "event_service_data"  # dict of service data
+
 # --- Defaults ---
 
 DEFAULT_MODE_OFF_NAME = "Off"
@@ -132,6 +163,14 @@ ATTR_NEXT_END = "next_end"
 ATTR_CURRENT_WINDOW = "current_window"
 ATTR_TODAY_BLOCKS = "today_blocks"
 ATTR_WEEK_BLOCKS = "week_blocks"
+# Events-mode attributes (mirrors block-mode shape but with single-time
+# entries instead of from/to windows).
+ATTR_SCHEDULE_KIND = "schedule_kind"
+ATTR_EVENT_ACTION = "event_action"
+ATTR_PULSE_DURATION = "pulse_duration_seconds"
+ATTR_PULSE_RUNNING = "pulse_running"
+ATTR_TODAY_EVENTS = "today_events"
+ATTR_WEEK_EVENTS = "week_events"
 # Retained for card compatibility — points at the companion entity itself
 # so legacy cards can still find the "schedule entity". New cards should
 # just read blocks from week_blocks directly.
@@ -156,6 +195,8 @@ ATTR_OFF_OPTION_LABEL = "off_option_label"
 
 SERVICE_SET_TIMER = "set_timer"
 SERVICE_SET_SCHEDULE_BLOCKS = "set_schedule_blocks"
+SERVICE_SET_SCHEDULE_EVENTS = "set_schedule_events"
+SERVICE_TRIGGER_EVENT_NOW = "trigger_event_now"
 SERVICE_SET_CURVE_POINTS = "set_curve_points"
 
 # --- Curve attributes ---

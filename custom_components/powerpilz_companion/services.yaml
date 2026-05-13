@@ -62,6 +62,39 @@ set_schedule_blocks:
       selector:
         object:
 
+set_schedule_events:
+  name: Set Smart Schedule weekly events
+  description: >-
+    Replace the weekly point-in-time events of a Smart Schedule helper
+    that is in events mode. Each event triggers the configured action
+    (toggle / pulse / custom service) on the target entity.
+  target:
+    entity:
+      integration: powerpilz_companion
+      domain: select
+  fields:
+    events:
+      name: Weekly events
+      description: >-
+        Per-weekday list of events (keys `monday`…`sunday`). Each entry
+        has a `time` (`HH:MM:SS`) and an optional `data` payload.
+        Existing events are replaced entirely.
+      required: true
+      selector:
+        object:
+
+trigger_event_now:
+  name: Trigger Smart Schedule event now
+  description: >-
+    Manually fire the configured event action on a Smart Schedule helper
+    that is in events mode. Works in both Auto and Off modes. A trigger
+    arriving while a pulse is running (or within its 10-second cool-down)
+    is silently dropped.
+  target:
+    entity:
+      integration: powerpilz_companion
+      domain: select
+
 set_curve_points:
   name: Set Smart Curve weekly points
   description: >-

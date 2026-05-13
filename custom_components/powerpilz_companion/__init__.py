@@ -35,7 +35,9 @@ from .const import (
     ENTRY_TYPE_TIMER,
     SERVICE_SET_CURVE_POINTS,
     SERVICE_SET_SCHEDULE_BLOCKS,
+    SERVICE_SET_SCHEDULE_EVENTS,
     SERVICE_SET_TIMER,
+    SERVICE_TRIGGER_EVENT_NOW,
     WEEKDAY_KEYS,
 )
 from .storage import (
@@ -45,6 +47,7 @@ from .storage import (
     async_migrate_from_schedule_entity,
     async_save_blocks,
     async_save_curve,
+    async_save_events,
 )
 
 CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
@@ -103,6 +106,37 @@ SET_SCHEDULE_BLOCKS_SCHEMA = vol.Schema(
             {vol.Optional(day): _DAY_SCHEMA for day in WEEKDAY_KEYS},
             extra=vol.REMOVE_EXTRA,
         ),
+    }
+)
+
+
+_EVENT_DAY_SCHEMA = vol.Schema(
+    [
+        vol.Schema(
+            {
+                vol.Required("time"): cv.string,
+                vol.Optional("data"): dict,
+            },
+            extra=vol.REMOVE_EXTRA,
+        )
+    ]
+)
+
+
+SET_SCHEDULE_EVENTS_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("events"): vol.Schema(
+            {vol.Optional(day): _EVENT_DAY_SCHEMA for day in WEEKDAY_KEYS},
+            extra=vol.REMOVE_EXTRA,
+        ),
+    }
+)
+
+
+TRIGGER_EVENT_NOW_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
     }
 )
 
@@ -260,6 +294,39 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
                 entity_id,
             )
 
+    async def handle_set_schedule_events(call: ServiceCall) -> None:
+        entity_id: str = call.data["entity_id"]
+        events: dict[str, list[dict[str, Any]]] = call.data["events"]
+
+        config_entry, entity = _find_schedule_entity_for(hass, entity_id)
+        if config_entry is None:
+            _LOGGER.warning(
+                "set_schedule_events: %s is not a PowerPilz Smart Schedule entity",
+                entity_id,
+            )
+            return
+
+        saved = await async_save_events(hass, config_entry.entry_id, events)
+        if entity is not None and hasattr(entity, "async_update_events"):
+            await entity.async_update_events(saved)
+        else:
+            _LOGGER.debug(
+                "set_schedule_events: entity for %s not live yet; events "
+                "persisted and will load on next setup.",
+                entity_id,
+            )
+
+    async def handle_trigger_event_now(call: ServiceCall) -> None:
+        entity_id: str = call.data["entity_id"]
+        _, entity = _find_schedule_entity_for(hass, entity_id)
+        if entity is None or not hasattr(entity, "async_trigger_event_now"):
+            _LOGGER.warning(
+                "trigger_event_now: %s is not a live PowerPilz Smart Schedule entity",
+                entity_id,
+            )
+            return
+        await entity.async_trigger_event_now()
+
     async def handle_set_curve_points(call: ServiceCall) -> None:
         entity_id: str = call.data["entity_id"]
         points: dict[str, list[dict[str, Any]]] = call.data["points"]
@@ -296,6 +363,18 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
         SERVICE_SET_CURVE_POINTS,
         handle_set_curve_points,
         schema=SET_CURVE_POINTS_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_SCHEDULE_EVENTS,
+        handle_set_schedule_events,
+        schema=SET_SCHEDULE_EVENTS_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_TRIGGER_EVENT_NOW,
+        handle_trigger_event_now,
+        schema=TRIGGER_EVENT_NOW_SCHEMA,
     )
     return True
 

@@ -13,27 +13,37 @@
       },
       "schedule": {
         "title": "Smart Schedule",
-        "description": "Bundles a target device, three override modes (Off / On / Auto) and a weekly schedule in one helper.\n\nThe weekly plan is edited directly in the PowerPilz Schedule card on your dashboard — long-press the card to open the weekly editor. Blocks are stored inside this integration; no extra schedule helper is needed.\n\nThe companion exposes a `binary_sensor` whose state reflects whether the schedule is currently active — usable in automations as a state trigger just like a native schedule helper.",
+        "description": "Bundles a target device, override modes and a weekly plan in one helper.\n\nTwo modes:\n• Blocks - weekly time windows (device is on during windows, off outside).\n• Events - point-in-time triggers (each event fires Toggle / Pulse / a custom service).\n\nThe weekly plan is edited directly in the PowerPilz Schedule card on your dashboard - long-press the card to open the weekly editor.",
         "data": {
           "name": "Name",
           "target_entity": "Device to control",
-          "mode_off_name": "Off mode — name",
-          "mode_off_icon": "Off mode — icon",
-          "mode_on_name": "On mode — name",
-          "mode_on_icon": "On mode — icon",
-          "mode_auto_name": "Auto mode — name",
-          "mode_auto_icon": "Auto mode — icon",
+          "schedule_kind": "Schedule kind",
+          "event_action": "Event action (events mode)",
+          "pulse_duration_seconds": "Pulse duration (seconds)",
+          "event_service": "Custom service (events mode)",
+          "event_service_data": "Custom service data",
+          "mode_off_name": "Off mode - name",
+          "mode_off_icon": "Off mode - icon",
+          "mode_on_name": "On mode - name",
+          "mode_on_icon": "On mode - icon",
+          "mode_auto_name": "Auto mode - name",
+          "mode_auto_icon": "Auto mode - icon",
           "restore_auto_on_boundary": "Resume Auto on next schedule boundary"
         },
         "data_description": {
-          "target_entity": "The switch, light or input_boolean that this helper automatically turns on/off when in Auto mode.",
-          "mode_off_name": "Display name for the Off mode (force device off).",
+          "target_entity": "The switch, light or input_boolean this helper drives (blocks mode) or triggers at each event time (events mode).",
+          "schedule_kind": "Blocks: classic time-window plan with on/off boundaries. Events: weekly point-in-time triggers, each fires the chosen action.",
+          "event_action": "What each event does. Toggle calls homeassistant.toggle. Pulse turns on, waits, turns off. Custom calls a service of your choice.",
+          "pulse_duration_seconds": "Seconds the target stays on during a pulse (1-900). A fixed 10s cool-down after each pulse swallows overlapping triggers.",
+          "event_service": "Service to call in events+custom mode, e.g. scene.turn_on or notify.mobile_app_x.",
+          "event_service_data": "Optional service data dict. entity_id is auto-filled from the target above.",
+          "mode_off_name": "Display name for the Off mode.",
           "mode_off_icon": "Icon shown while in Off mode.",
-          "mode_on_name": "Display name for the On mode (force device on).",
+          "mode_on_name": "Display name for the On mode (blocks mode only).",
           "mode_on_icon": "Icon shown while in On mode.",
-          "mode_auto_name": "Display name for the Auto mode (device follows the weekly schedule).",
+          "mode_auto_name": "Display name for the Auto mode.",
           "mode_auto_icon": "Icon shown while in Auto mode.",
-          "restore_auto_on_boundary": "If enabled, a manual On/Off override is automatically lifted at the next schedule state change."
+          "restore_auto_on_boundary": "Blocks mode only: a manual On/Off override is automatically lifted at the next schedule state change."
         }
       },
       "timer": {
@@ -101,7 +111,9 @@
     "error": {
       "duplicate_mode_names": "The three mode names must be different.",
       "targets_required": "Pick at least one heating target.",
-      "invalid_range": "Maximum must be greater than minimum."
+      "invalid_range": "Maximum must be greater than minimum.",
+      "invalid_event_service": "Custom service must look like `domain.service`.",
+      "invalid_event_service_data": "Custom service data must be a dict."
     },
     "abort": {
       "already_configured": "This configuration is already set up."
@@ -111,20 +123,29 @@
     "step": {
       "schedule": {
         "title": "Smart Schedule options",
-        "description": "Adjust the helper settings. The weekly schedule itself is edited in the PowerPilz Schedule card on your dashboard — long-press the card to open the weekly editor.",
+        "description": "Adjust the helper settings. The weekly plan itself is edited in the PowerPilz Schedule card on your dashboard - long-press the card to open the weekly editor.",
         "data": {
           "name": "Name",
           "target_entity": "Device to control",
-          "mode_off_name": "Off mode — name",
-          "mode_off_icon": "Off mode — icon",
-          "mode_on_name": "On mode — name",
-          "mode_on_icon": "On mode — icon",
-          "mode_auto_name": "Auto mode — name",
-          "mode_auto_icon": "Auto mode — icon",
+          "schedule_kind": "Schedule kind",
+          "event_action": "Event action (events mode)",
+          "pulse_duration_seconds": "Pulse duration (seconds)",
+          "event_service": "Custom service (events mode)",
+          "event_service_data": "Custom service data",
+          "mode_off_name": "Off mode - name",
+          "mode_off_icon": "Off mode - icon",
+          "mode_on_name": "On mode - name",
+          "mode_on_icon": "On mode - icon",
+          "mode_auto_name": "Auto mode - name",
+          "mode_auto_icon": "Auto mode - icon",
           "restore_auto_on_boundary": "Resume Auto on next schedule boundary"
         },
         "data_description": {
-          "target_entity": "The switch, light or input_boolean this helper drives when in Auto mode."
+          "target_entity": "The switch, light or input_boolean this helper drives.",
+          "schedule_kind": "Blocks (time windows) or Events (point-in-time triggers).",
+          "event_action": "What each event does in events mode.",
+          "pulse_duration_seconds": "Seconds the target stays on during a pulse (1-900).",
+          "event_service": "Service to call in events+custom mode."
         }
       },
       "timer": {
@@ -184,7 +205,9 @@
     "error": {
       "duplicate_mode_names": "The three mode names must be different.",
       "targets_required": "Pick at least one heating target.",
-      "invalid_range": "Maximum must be greater than minimum."
+      "invalid_range": "Maximum must be greater than minimum.",
+      "invalid_event_service": "Custom service must look like `domain.service`.",
+      "invalid_event_service_data": "Custom service data must be a dict."
     }
   },
   "services": {
@@ -231,6 +254,30 @@
         "points": {
           "name": "Weekly points",
           "description": "Per-weekday list of curve points. Each entry has a `time` (HH:MM:SS) and a numeric `value`."
+        }
+      }
+    },
+    "set_schedule_events": {
+      "name": "Set Smart Schedule weekly events",
+      "description": "Replace the weekly point-in-time events of a Smart Schedule helper that is in events mode.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "The Smart Schedule select entity."
+        },
+        "events": {
+          "name": "Weekly events",
+          "description": "Per-weekday list of events. Each entry has a `time` (HH:MM:SS) and an optional `data` payload."
+        }
+      }
+    },
+    "trigger_event_now": {
+      "name": "Trigger Smart Schedule event now",
+      "description": "Manually fire the configured event action on a Smart Schedule helper in events mode. Works in Auto and Off modes; suppressed during pulse cool-down.",
+      "fields": {
+        "entity_id": {
+          "name": "Entity",
+          "description": "The Smart Schedule select entity."
         }
       }
     }

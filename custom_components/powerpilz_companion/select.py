@@ -17,6 +17,7 @@ dedicated Store (`.storage/powerpilz_companion.schedules`). This entity:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -36,18 +37,27 @@ from homeassistant.util import dt as dt_util
 from .const import (
     ATTR_COMPANION_ENTITY,
     ATTR_CURRENT_WINDOW,
+    ATTR_EVENT_ACTION,
     ATTR_LOGICAL_MODE,
     ATTR_MODE_ICONS,
     ATTR_MODE_NAMES,
     ATTR_NEXT_END,
     ATTR_NEXT_EVENT,
     ATTR_NEXT_START,
+    ATTR_PULSE_DURATION,
+    ATTR_PULSE_RUNNING,
     ATTR_SCHEDULE_ACTIVE,
+    ATTR_SCHEDULE_KIND,
     ATTR_TARGET_ENTITY,
     ATTR_TARGET_STATE,
     ATTR_TODAY_BLOCKS,
+    ATTR_TODAY_EVENTS,
     ATTR_WEEK_BLOCKS,
+    ATTR_WEEK_EVENTS,
     CONF_ENTRY_TYPE,
+    CONF_EVENT_ACTION,
+    CONF_EVENT_SERVICE,
+    CONF_EVENT_SERVICE_DATA,
     CONF_MODE_AUTO_ICON,
     CONF_MODE_AUTO_NAME,
     CONF_MODE_OFF_ICON,
@@ -55,24 +65,35 @@ from .const import (
     CONF_MODE_ON_ICON,
     CONF_MODE_ON_NAME,
     CONF_NAME,
+    CONF_PULSE_DURATION,
     CONF_RESTORE_AUTO_ON_BOUNDARY,
+    CONF_SCHEDULE_KIND,
     CONF_TARGET_ENTITY,
+    DEFAULT_EVENT_ACTION,
     DEFAULT_MODE_AUTO_ICON,
     DEFAULT_MODE_AUTO_NAME,
     DEFAULT_MODE_OFF_ICON,
     DEFAULT_MODE_OFF_NAME,
     DEFAULT_MODE_ON_ICON,
     DEFAULT_MODE_ON_NAME,
+    DEFAULT_PULSE_DURATION,
+    DEFAULT_SCHEDULE_KIND,
     DOMAIN,
     ENTRY_TYPE_CURVE,
     ENTRY_TYPE_TIMER,
+    EVENT_ACTION_CUSTOM,
+    EVENT_ACTION_PULSE,
+    EVENT_ACTION_TOGGLE,
     MODE_AUTO,
     MODE_OFF,
     MODE_ON,
+    PULSE_COOL_DOWN_SECONDS,
+    SCHEDULE_KIND_BLOCKS,
+    SCHEDULE_KIND_EVENTS,
     WEEKDAY_KEYS,
 )
 from .curve import SmartCurveSelect
-from .storage import async_load_blocks, async_load_curve
+from .storage import async_load_blocks, async_load_curve, async_load_events
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,7 +112,8 @@ async def async_setup_entry(
         async_add_entities([SmartCurveSelect(entry, points)])
         return
     blocks = await async_load_blocks(hass, entry.entry_id)
-    async_add_entities([SmartScheduleSelect(entry, blocks)])
+    events = await async_load_events(hass, entry.entry_id)
+    async_add_entities([SmartScheduleSelect(entry, blocks, events)])
 
 
 class SmartScheduleSelect(SelectEntity, RestoreEntity):
@@ -104,6 +126,7 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
         self,
         entry: ConfigEntry,
         blocks: dict[str, list[dict[str, Any]]],
+        events: dict[str, list[dict[str, Any]]] | None = None,
     ) -> None:
         """Initialize the helper entity."""
         self._entry = entry
@@ -130,16 +153,38 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
             config.get(CONF_RESTORE_AUTO_ON_BOUNDARY, True)
         )
 
+        # Schedule kind + event-mode configuration.
+        kind = config.get(CONF_SCHEDULE_KIND, DEFAULT_SCHEDULE_KIND)
+        self._kind: str = kind if kind in (SCHEDULE_KIND_BLOCKS, SCHEDULE_KIND_EVENTS) else DEFAULT_SCHEDULE_KIND
+        self._event_action: str = config.get(CONF_EVENT_ACTION, DEFAULT_EVENT_ACTION)
+        self._pulse_duration: int = int(config.get(CONF_PULSE_DURATION, DEFAULT_PULSE_DURATION) or DEFAULT_PULSE_DURATION)
+        self._event_service: str | None = config.get(CONF_EVENT_SERVICE) or None
+        self._event_service_data: dict[str, Any] = dict(config.get(CONF_EVENT_SERVICE_DATA) or {})
+
         self._logical_mode: str = MODE_AUTO
         self._blocks: dict[str, list[dict[str, Any]]] = blocks
+        self._events: dict[str, list[dict[str, Any]]] = events or {day: [] for day in WEEKDAY_KEYS}
         self._last_active: bool = False
         self._unsub_boundary: CALLBACK_TYPE | None = None
 
-        self._attr_options = [
-            self._mode_names[MODE_OFF],
-            self._mode_names[MODE_ON],
-            self._mode_names[MODE_AUTO],
-        ]
+        # Pulse cool-down state: timestamp until which any new trigger
+        # (Auto or manual) is silently dropped. Set when a pulse starts.
+        self._pulse_blocked_until: datetime | None = None
+        self._pulse_running: bool = False
+
+        if self._kind == SCHEDULE_KIND_EVENTS:
+            # Events mode: only Off / Auto are meaningful — "On" makes
+            # no sense without an on/off state. Card matches this.
+            self._attr_options = [
+                self._mode_names[MODE_OFF],
+                self._mode_names[MODE_AUTO],
+            ]
+        else:
+            self._attr_options = [
+                self._mode_names[MODE_OFF],
+                self._mode_names[MODE_ON],
+                self._mode_names[MODE_AUTO],
+            ]
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -155,6 +200,9 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
             logical = self._display_name_to_logical(last_state.state)
             if logical:
                 self._logical_mode = logical
+        # Events mode has no "On" — coerce stale restores to Auto.
+        if self._kind == SCHEDULE_KIND_EVENTS and self._logical_mode == MODE_ON:
+            self._logical_mode = MODE_AUTO
 
         # Expose ourselves in hass.data for services + cross-platform
         # (binary_sensor) access.
@@ -205,6 +253,39 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         target_state = self.hass.states.get(self._target_entity)
+        base: dict[str, Any] = {
+            ATTR_LOGICAL_MODE: self._logical_mode,
+            ATTR_TARGET_ENTITY: self._target_entity,
+            ATTR_TARGET_STATE: target_state.state if target_state else None,
+            ATTR_MODE_NAMES: dict(self._mode_names),
+            ATTR_MODE_ICONS: dict(self._mode_icons),
+            ATTR_SCHEDULE_KIND: self._kind,
+            # Self-reference — lets cards that only know the companion
+            # entity_id discover themselves via templates.
+            ATTR_COMPANION_ENTITY: self.entity_id,
+        }
+
+        if self._kind == SCHEDULE_KIND_EVENTS:
+            next_event_dt = self._next_event_dt()
+            base.update({
+                ATTR_EVENT_ACTION: self._event_action,
+                ATTR_PULSE_DURATION: self._pulse_duration,
+                ATTR_PULSE_RUNNING: self._pulse_running,
+                ATTR_NEXT_EVENT: next_event_dt.isoformat() if next_event_dt else None,
+                ATTR_TODAY_EVENTS: self._events_for_today(),
+                ATTR_WEEK_EVENTS: self._events,
+                # Mirror block-mode keys with empty/false defaults so
+                # cards reading both shapes don't have to switch.
+                ATTR_SCHEDULE_ACTIVE: self._pulse_running,
+                ATTR_CURRENT_WINDOW: None,
+                ATTR_TODAY_BLOCKS: [],
+                ATTR_WEEK_BLOCKS: {day: [] for day in WEEKDAY_KEYS},
+                ATTR_NEXT_START: None,
+                ATTR_NEXT_END: None,
+            })
+            return base
+
+        # Blocks mode (default / legacy).
         active = self._is_active_now()
         next_start, next_end = self._next_transitions()
         # Prefer end-of-window if we're currently in one; otherwise the
@@ -214,12 +295,7 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
         current_window = self._current_window()
         today_blocks = self._blocks_for_today()
 
-        return {
-            ATTR_LOGICAL_MODE: self._logical_mode,
-            ATTR_TARGET_ENTITY: self._target_entity,
-            ATTR_TARGET_STATE: target_state.state if target_state else None,
-            ATTR_MODE_NAMES: dict(self._mode_names),
-            ATTR_MODE_ICONS: dict(self._mode_icons),
+        base.update({
             ATTR_SCHEDULE_ACTIVE: active,
             ATTR_NEXT_EVENT: next_event.isoformat() if next_event else None,
             ATTR_NEXT_START: next_start.isoformat() if next_start else None,
@@ -227,10 +303,10 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
             ATTR_CURRENT_WINDOW: current_window,
             ATTR_TODAY_BLOCKS: today_blocks,
             ATTR_WEEK_BLOCKS: self._blocks,
-            # Self-reference — lets cards that only know the companion
-            # entity_id discover themselves via templates.
-            ATTR_COMPANION_ENTITY: self.entity_id,
-        }
+            ATTR_TODAY_EVENTS: [],
+            ATTR_WEEK_EVENTS: {day: [] for day in WEEKDAY_KEYS},
+        })
+        return base
 
     async def async_select_option(self, option: str) -> None:
         """Change the logical mode via user interaction."""
@@ -269,6 +345,32 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
             await self._apply_current_mode(reason="blocks updated")
 
         self.async_write_ha_state()
+
+    async def async_update_events(
+        self, events: dict[str, list[dict[str, Any]]]
+    ) -> None:
+        """Install a new set of weekly events (already persisted)."""
+        self._events = events
+        # Reschedule the next trigger because event times may have moved.
+        if self._unsub_boundary is not None:
+            self._unsub_boundary()
+            self._unsub_boundary = None
+        self._schedule_next_boundary()
+        self.async_write_ha_state()
+
+    async def async_trigger_event_now(self) -> bool:
+        """Manually fire the configured event action.
+
+        Returns True if the action was dispatched, False if the request
+        was dropped due to an active pulse cool-down.
+        """
+        if self._kind != SCHEDULE_KIND_EVENTS:
+            _LOGGER.debug(
+                "trigger_event_now on %s ignored: not in events mode",
+                self.entity_id,
+            )
+            return False
+        return await self._trigger_event(reason="manual trigger", force=True)
 
     # ------------------------------------------------------------------
     # Schedule evaluation
@@ -377,7 +479,16 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
         return next_start, next_end
 
     def _schedule_next_boundary(self) -> None:
-        """Arm a one-shot callback for the next transition."""
+        """Arm a one-shot callback for the next transition / event."""
+        if self._kind == SCHEDULE_KIND_EVENTS:
+            fire_at = self._next_event_dt()
+            if fire_at is None:
+                return
+            self._unsub_boundary = async_track_point_in_time(
+                self.hass, self._on_event_boundary, fire_at
+            )
+            return
+
         next_start, next_end = self._next_transitions()
         candidates = [t for t in (next_start, next_end) if t is not None]
         if not candidates:
@@ -389,10 +500,29 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
 
     @callback
     def _on_boundary(self, _now: datetime) -> None:
-        """Fired exactly at the next boundary time."""
+        """Fired exactly at the next boundary time (blocks mode)."""
         self._unsub_boundary = None
         new_active = self._is_active_now()
         self.hass.async_create_task(self._handle_boundary(new_active))
+
+    @callback
+    def _on_event_boundary(self, _now: datetime) -> None:
+        """Fired exactly at the next scheduled event time (events mode)."""
+        self._unsub_boundary = None
+        self.hass.async_create_task(self._handle_event_boundary())
+
+    async def _handle_event_boundary(self) -> None:
+        """Trigger the configured action (unless paused by Off mode)."""
+        if self._logical_mode == MODE_OFF:
+            _LOGGER.debug(
+                "Smart Schedule %s: event suppressed (Off mode)",
+                self.entity_id,
+            )
+        else:
+            await self._trigger_event(reason="scheduled event", force=False)
+        # Always rearm the next callback so the loop survives.
+        self._schedule_next_boundary()
+        self.async_write_ha_state()
 
     async def _handle_boundary(self, new_active: bool) -> None:
         prev_active = self._last_active
@@ -438,7 +568,13 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
         return STATE_ON if self._is_active_now() else STATE_OFF
 
     async def _apply_current_mode(self, reason: str) -> None:
-        """Drive the target entity to the desired state if different."""
+        """Drive the target entity to the desired state if different.
+
+        No-op in events mode — events only fire at scheduled times and
+        don't maintain a continuous on/off state.
+        """
+        if self._kind == SCHEDULE_KIND_EVENTS:
+            return
         desired = self._desired_target_state()
         if desired is None:
             return
@@ -475,6 +611,136 @@ class SmartScheduleSelect(SelectEntity, RestoreEntity):
             _LOGGER.warning(
                 "Failed to drive %s to %s: %s", self._target_entity, desired, err
             )
+
+    # ------------------------------------------------------------------
+    # Events-mode helpers
+    # ------------------------------------------------------------------
+
+    def _events_for_day(self, dt_obj: datetime) -> list[dict[str, Any]]:
+        return list(self._events.get(self._weekday_key_for(dt_obj), []))
+
+    def _events_for_today(self) -> list[dict[str, Any]]:
+        return self._events_for_day(dt_util.now())
+
+    def _next_event_dt(self) -> datetime | None:
+        """Return the wall-clock datetime of the next scheduled event."""
+        now = dt_util.now()
+        day_start = self._day_start(now)
+        for offset in range(8):  # today + next 7 days
+            probe = day_start + timedelta(days=offset)
+            day_events = self._events.get(self._weekday_key_for(probe), [])
+            for ev in day_events:
+                seconds = self._parse_hms_to_seconds(ev.get("time", ""))
+                if seconds is None:
+                    continue
+                fire_at = probe + timedelta(seconds=seconds)
+                if fire_at > now:
+                    return fire_at
+        return None
+
+    async def _trigger_event(self, reason: str, force: bool) -> bool:
+        """Execute the configured event action with cool-down handling.
+
+        Returns True if dispatched, False if dropped. `force=True` is set
+        for manual triggers — they still respect the pulse cool-down
+        (variant C, fixed 10s) but bypass any future-event timing check.
+        """
+        now = dt_util.now()
+        if self._pulse_blocked_until is not None and now < self._pulse_blocked_until:
+            _LOGGER.debug(
+                "Smart Schedule %s: %s suppressed (pulse cool-down until %s)",
+                self.entity_id,
+                reason,
+                self._pulse_blocked_until.isoformat(),
+            )
+            return False
+
+        if not self._target_entity:
+            _LOGGER.warning(
+                "Smart Schedule %s: %s skipped — no target entity configured",
+                self.entity_id,
+                reason,
+            )
+            return False
+
+        action = self._event_action
+        try:
+            if action == EVENT_ACTION_PULSE:
+                self.hass.async_create_task(self._run_pulse(reason))
+            elif action == EVENT_ACTION_CUSTOM:
+                await self._call_custom_event_service(reason)
+            else:  # toggle (default)
+                await self.hass.services.async_call(
+                    "homeassistant",
+                    "toggle",
+                    {"entity_id": self._target_entity},
+                    blocking=False,
+                )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Smart Schedule %s: event dispatch failed (%s): %s",
+                self.entity_id,
+                reason,
+                err,
+            )
+            return False
+        return True
+
+    async def _run_pulse(self, reason: str) -> None:
+        """Turn the target on, wait pulse_duration seconds, turn it off.
+
+        Sets a cool-down window (= pulse_duration + 10s) during which any
+        other trigger is silently dropped. The pulse itself is best-effort
+        — failures are logged but do not propagate.
+        """
+        duration = max(1, int(self._pulse_duration or DEFAULT_PULSE_DURATION))
+        end_at = dt_util.now() + timedelta(seconds=duration + PULSE_COOL_DOWN_SECONDS)
+        self._pulse_blocked_until = end_at
+        self._pulse_running = True
+        self.async_write_ha_state()
+
+        _LOGGER.debug(
+            "Smart Schedule %s: pulse start (%s) for %ds",
+            self.entity_id,
+            reason,
+            duration,
+        )
+        try:
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_on",
+                {"entity_id": self._target_entity},
+                blocking=False,
+            )
+            await asyncio.sleep(duration)
+            await self.hass.services.async_call(
+                "homeassistant",
+                "turn_off",
+                {"entity_id": self._target_entity},
+                blocking=False,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Smart Schedule %s: pulse failed: %s", self.entity_id, err
+            )
+        finally:
+            self._pulse_running = False
+            self.async_write_ha_state()
+
+    async def _call_custom_event_service(self, reason: str) -> None:
+        """Fire the user-configured custom service for this event."""
+        service_ref = (self._event_service or "").strip()
+        if "." not in service_ref:
+            _LOGGER.warning(
+                "Smart Schedule %s: custom event has no valid service (%s)",
+                self.entity_id,
+                reason,
+            )
+            return
+        domain, service = service_ref.split(".", 1)
+        data = dict(self._event_service_data)
+        data.setdefault("entity_id", self._target_entity)
+        await self.hass.services.async_call(domain, service, data, blocking=False)
 
     # ------------------------------------------------------------------
     # Helpers

@@ -118,6 +118,7 @@ async def async_save_blocks(
 
     Returns the normalized payload that was actually saved so callers
     can hand it straight back to their entity without re-reading.
+    Preserves any sibling `events` bucket already on the entry.
     """
     normalized = _normalize_blocks(blocks)
     bucket = hass.data.setdefault(DOMAIN, {})
@@ -127,7 +128,79 @@ async def async_save_blocks(
     async with lock:
         data = await _load_raw(hass)
         entries = data.setdefault("entries", {})
-        entries[entry_id] = {"blocks": normalized}
+        existing = entries.get(entry_id) if isinstance(entries.get(entry_id), dict) else {}
+        existing = dict(existing or {})
+        existing["blocks"] = normalized
+        entries[entry_id] = existing
+        store = _get_store(hass)
+        await store.async_save(data)
+    return normalized
+
+
+# ---------------------------------------------------------------------
+# Events (Smart Schedule, events-mode)
+# ---------------------------------------------------------------------
+
+
+def _normalize_events(raw: Any) -> dict[str, list[dict[str, Any]]]:
+    """Coerce arbitrary input into the canonical week-events shape.
+
+    Each event is `{"time": "HH:MM:SS", "data": {...}?}`. Anything else
+    is silently dropped — the storage layer is the trust boundary.
+    """
+    out = _empty_week()
+    if not isinstance(raw, dict):
+        return out
+    for day in WEEKDAY_KEYS:
+        day_events = raw.get(day)
+        if not isinstance(day_events, list):
+            continue
+        cleaned: list[dict[str, Any]] = []
+        for event in day_events:
+            if not isinstance(event, dict):
+                continue
+            time = event.get("time")
+            if not isinstance(time, str):
+                continue
+            entry: dict[str, Any] = {"time": time}
+            data = event.get("data")
+            if isinstance(data, dict) and data:
+                entry["data"] = data
+            cleaned.append(entry)
+        out[day] = cleaned
+    return out
+
+
+async def async_load_events(
+    hass: HomeAssistant, entry_id: str
+) -> dict[str, list[dict[str, Any]]]:
+    """Return the weekly events for a Smart Schedule entry in events mode."""
+    data = await _load_raw(hass)
+    entry_blob = data.get("entries", {}).get(entry_id) or {}
+    return _normalize_events(entry_blob.get("events"))
+
+
+async def async_save_events(
+    hass: HomeAssistant,
+    entry_id: str,
+    events: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Persist a new set of weekly events for an entry.
+
+    Preserves any sibling `blocks` bucket already on the entry.
+    """
+    normalized = _normalize_events(events)
+    bucket = hass.data.setdefault(DOMAIN, {})
+    lock: asyncio.Lock = bucket.setdefault(
+        "_schedule_store_lock", asyncio.Lock()
+    )
+    async with lock:
+        data = await _load_raw(hass)
+        entries = data.setdefault("entries", {})
+        existing = entries.get(entry_id) if isinstance(entries.get(entry_id), dict) else {}
+        existing = dict(existing or {})
+        existing["events"] = normalized
+        entries[entry_id] = existing
         store = _get_store(hass)
         await store.async_save(data)
     return normalized
