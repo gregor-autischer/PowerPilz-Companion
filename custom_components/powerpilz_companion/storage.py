@@ -33,7 +33,13 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION, WEEKDAY_KEYS
+from .const import (
+    CURVE_STORAGE_KEY,
+    DOMAIN,
+    STORAGE_KEY,
+    STORAGE_VERSION,
+    WEEKDAY_KEYS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,6 +145,115 @@ async def async_delete_entry(hass: HomeAssistant, entry_id: str) -> None:
         if isinstance(entries, dict) and entry_id in entries:
             entries.pop(entry_id, None)
             store = _get_store(hass)
+            await store.async_save(data)
+
+
+# ---------------------------------------------------------------------
+# Curve points (Smart Curve helper)
+# ---------------------------------------------------------------------
+
+_CURVE_STORE_CACHE_KEY = "_curve_store"
+_CURVE_LOCK_KEY = "_curve_store_lock"
+
+
+def _empty_week_points() -> dict[str, list[dict[str, Any]]]:
+    return {day: [] for day in WEEKDAY_KEYS}
+
+
+def _normalize_curve_points(raw: Any) -> dict[str, list[dict[str, Any]]]:
+    """Coerce arbitrary input into the canonical curve-point shape.
+
+    Each entry: `{"time": "HH:MM:SS", "value": <float>}`. Times are
+    sorted ascending; duplicates at the same time keep the last value.
+    """
+    out = _empty_week_points()
+    if not isinstance(raw, dict):
+        return out
+    for day in WEEKDAY_KEYS:
+        day_points = raw.get(day)
+        if not isinstance(day_points, list):
+            continue
+        cleaned: list[dict[str, Any]] = []
+        seen_times: dict[str, int] = {}
+        for point in day_points:
+            if not isinstance(point, dict):
+                continue
+            t = point.get("time")
+            v = point.get("value")
+            if not isinstance(t, str):
+                continue
+            try:
+                value = float(v)
+            except (TypeError, ValueError):
+                continue
+            if t in seen_times:
+                cleaned[seen_times[t]] = {"time": t, "value": value}
+            else:
+                seen_times[t] = len(cleaned)
+                cleaned.append({"time": t, "value": value})
+        cleaned.sort(key=lambda p: p["time"])
+        out[day] = cleaned
+    return out
+
+
+def _get_curve_store(hass: HomeAssistant) -> Store:
+    bucket = hass.data.setdefault(DOMAIN, {})
+    store = bucket.get(_CURVE_STORE_CACHE_KEY)
+    if store is None:
+        store = Store(hass, STORAGE_VERSION, CURVE_STORAGE_KEY)
+        bucket[_CURVE_STORE_CACHE_KEY] = store
+        bucket.setdefault(_CURVE_LOCK_KEY, asyncio.Lock())
+    return store
+
+
+async def _load_curve_raw(hass: HomeAssistant) -> dict[str, Any]:
+    store = _get_curve_store(hass)
+    data = await store.async_load()
+    if not isinstance(data, dict):
+        return {"entries": {}}
+    entries = data.get("entries")
+    if not isinstance(entries, dict):
+        data["entries"] = {}
+    return data
+
+
+async def async_load_curve(
+    hass: HomeAssistant, entry_id: str
+) -> dict[str, list[dict[str, Any]]]:
+    """Return the weekly point lists for a Smart Curve entry."""
+    data = await _load_curve_raw(hass)
+    entry_blob = data.get("entries", {}).get(entry_id) or {}
+    return _normalize_curve_points(entry_blob.get("points"))
+
+
+async def async_save_curve(
+    hass: HomeAssistant,
+    entry_id: str,
+    points: dict[str, list[dict[str, Any]]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Persist a new set of weekly curve points for an entry."""
+    normalized = _normalize_curve_points(points)
+    bucket = hass.data.setdefault(DOMAIN, {})
+    lock: asyncio.Lock = bucket.setdefault(_CURVE_LOCK_KEY, asyncio.Lock())
+    async with lock:
+        data = await _load_curve_raw(hass)
+        entries = data.setdefault("entries", {})
+        entries[entry_id] = {"points": normalized}
+        store = _get_curve_store(hass)
+        await store.async_save(data)
+    return normalized
+
+
+async def async_delete_curve_entry(hass: HomeAssistant, entry_id: str) -> None:
+    """Drop the curve bucket for an entry."""
+    bucket = hass.data.setdefault(DOMAIN, {})
+    lock: asyncio.Lock = bucket.setdefault(_CURVE_LOCK_KEY, asyncio.Lock())
+    async with lock:
+        data = await _load_curve_raw(hass)
+        entries = data.get("entries")
+        if isinstance(entries, dict) and entry_id in entries:
+            entries.pop(entry_id, None)
+            store = _get_curve_store(hass)
             await store.async_save(data)
 
 

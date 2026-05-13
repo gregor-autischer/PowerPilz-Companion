@@ -15,11 +15,28 @@ DOMAIN = "powerpilz_companion"
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_SCHEDULE = "schedule"
 ENTRY_TYPE_TIMER = "timer"
+ENTRY_TYPE_CURVE = "curve"
 
 # --- Config keys ---
 
 CONF_NAME = "name"
 CONF_TARGET_ENTITY = "target_entity"
+
+# Smart Curve — multi-target list of climate/number entities the curve
+# drives, plus shape/range options.
+CONF_TARGET_ENTITIES = "target_entities"
+CONF_UPDATE_INTERVAL = "update_interval_minutes"
+CONF_VALUE_MIN = "value_min"
+CONF_VALUE_MAX = "value_max"
+CONF_UNIT = "unit"
+CONF_MODE_ON_VALUE = "mode_on_value"
+CONF_SAME_FOR_ALL_DAYS = "same_for_all_days"
+
+DEFAULT_UPDATE_INTERVAL = 15
+DEFAULT_VALUE_MIN = 5.0
+DEFAULT_VALUE_MAX = 30.0
+DEFAULT_UNIT = "°C"
+DEFAULT_MODE_ON_VALUE = 22.0
 
 # Smart Timer state — persisted in config entry options between restarts.
 # Values are ISO-8601 datetime strings (e.g. "2026-04-19T18:30:00").
@@ -139,6 +156,20 @@ ATTR_OFF_OPTION_LABEL = "off_option_label"
 
 SERVICE_SET_TIMER = "set_timer"
 SERVICE_SET_SCHEDULE_BLOCKS = "set_schedule_blocks"
+SERVICE_SET_CURVE_POINTS = "set_curve_points"
+
+# --- Curve attributes ---
+
+ATTR_CURVE_POINTS = "week_points"
+ATTR_TODAY_POINTS = "today_points"
+ATTR_CURRENT_VALUE = "current_value"
+ATTR_VALUE_MIN = "value_min"
+ATTR_VALUE_MAX = "value_max"
+ATTR_UNIT = "unit"
+ATTR_UPDATE_INTERVAL = "update_interval_minutes"
+ATTR_TARGET_ENTITIES = "target_entities"
+ATTR_SAME_FOR_ALL_DAYS = "same_for_all_days"
+ATTR_MODE_ON_VALUE = "mode_on_value"
 
 # --- Storage ---
 
@@ -147,6 +178,11 @@ SERVICE_SET_SCHEDULE_BLOCKS = "set_schedule_blocks"
 # from config_entries so rapid edits don't churn the entry registry.
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.schedules"
+
+# Curve points live in the same store under a separate top-level
+# `curves` bucket: `{ entry_id: { points: { monday: [...], ... } } }`.
+# A point is `{time: "HH:MM:SS", value: <float>}`.
+CURVE_STORAGE_KEY = f"{DOMAIN}.curves"
 
 # Canonical weekday keys used in all block payloads (attributes, store,
 # service calls, card). Identical to what HA's native schedule helper

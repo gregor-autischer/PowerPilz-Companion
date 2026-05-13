@@ -64,13 +64,15 @@ from .const import (
     DEFAULT_MODE_ON_ICON,
     DEFAULT_MODE_ON_NAME,
     DOMAIN,
+    ENTRY_TYPE_CURVE,
     ENTRY_TYPE_TIMER,
     MODE_AUTO,
     MODE_OFF,
     MODE_ON,
     WEEKDAY_KEYS,
 )
-from .storage import async_load_blocks
+from .curve import SmartCurveSelect
+from .storage import async_load_blocks, async_load_curve
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,8 +82,13 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Smart Schedule select entity from a config entry."""
-    if entry.options.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_TIMER:
+    """Set up the Smart Schedule / Smart Curve select entity from a config entry."""
+    entry_type = entry.options.get(CONF_ENTRY_TYPE)
+    if entry_type == ENTRY_TYPE_TIMER:
+        return
+    if entry_type == ENTRY_TYPE_CURVE:
+        points = await async_load_curve(hass, entry.entry_id)
+        async_add_entities([SmartCurveSelect(entry, points)])
         return
     blocks = await async_load_blocks(hass, entry.entry_id)
     async_add_entities([SmartScheduleSelect(entry, blocks)])

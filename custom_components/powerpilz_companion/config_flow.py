@@ -35,28 +35,41 @@ from .const import (
     CONF_MODE_OFF_NAME,
     CONF_MODE_ON_ICON,
     CONF_MODE_ON_NAME,
+    CONF_MODE_ON_VALUE,
     CONF_NAME,
     CONF_RESTORE_AUTO_ON_BOUNDARY,
+    CONF_SAME_FOR_ALL_DAYS,
     CONF_STATE_ACTIVE_ICON,
     CONF_STATE_ACTIVE_NAME,
     CONF_STATE_INACTIVE_ICON,
     CONF_STATE_INACTIVE_NAME,
+    CONF_TARGET_ENTITIES,
     CONF_TARGET_ENTITY,
     CONF_TIMER_DIRECTION,
     CONF_TIMER_OFF_OPTION,
     CONF_TIMER_ON_OPTION,
+    CONF_UNIT,
+    CONF_UPDATE_INTERVAL,
+    CONF_VALUE_MAX,
+    CONF_VALUE_MIN,
     DEFAULT_MODE_AUTO_ICON,
     DEFAULT_MODE_AUTO_NAME,
     DEFAULT_MODE_OFF_ICON,
     DEFAULT_MODE_OFF_NAME,
     DEFAULT_MODE_ON_ICON,
     DEFAULT_MODE_ON_NAME,
+    DEFAULT_MODE_ON_VALUE,
     DEFAULT_STATE_ACTIVE_ICON,
     DEFAULT_STATE_ACTIVE_NAME,
     DEFAULT_STATE_INACTIVE_ICON,
     DEFAULT_STATE_INACTIVE_NAME,
     DEFAULT_TIMER_DIRECTION,
+    DEFAULT_UNIT,
+    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_VALUE_MAX,
+    DEFAULT_VALUE_MIN,
     DOMAIN,
+    ENTRY_TYPE_CURVE,
     ENTRY_TYPE_SCHEDULE,
     ENTRY_TYPE_TIMER,
     TIMER_DIRECTION_BOTH,
@@ -301,6 +314,132 @@ def _timer_options_schema(
     return vol.Schema(fields), display_options, smart_defaults
 
 
+# ---------------------------------------------------------------------------
+# Curve schema + validation
+# ---------------------------------------------------------------------------
+
+
+def _curve_schema(
+    defaults: Mapping[str, Any] | None = None,
+) -> vol.Schema:
+    defaults = defaults or {}
+
+    targets_selector = selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain=["climate", "number", "input_number"],
+            multiple=True,
+        )
+    )
+    text_selector = selector.TextSelector(selector.TextSelectorConfig())
+    icon_selector = selector.IconSelector(selector.IconSelectorConfig())
+    boolean_selector = selector.BooleanSelector()
+    interval_selector = selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=1, max=240, step=1,
+            mode=selector.NumberSelectorMode.BOX,
+            unit_of_measurement="min",
+        )
+    )
+    value_selector = selector.NumberSelector(
+        selector.NumberSelectorConfig(
+            min=-50, max=120, step=0.5,
+            mode=selector.NumberSelectorMode.BOX,
+        )
+    )
+
+    def _marker(key: str, required: bool, fallback: Any = None) -> Any:
+        current = defaults.get(key, fallback)
+        mk = vol.Required if required else vol.Optional
+        if current in (None, "", []):
+            return mk(key)
+        return mk(key, default=current)
+
+    fields: dict[Any, Any] = {}
+    fields[_marker(CONF_NAME, True, "")] = text_selector
+    fields[_marker(CONF_TARGET_ENTITIES, True, [])] = targets_selector
+    fields[
+        vol.Optional(
+            CONF_UPDATE_INTERVAL,
+            default=defaults.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+        )
+    ] = interval_selector
+    fields[
+        vol.Optional(
+            CONF_VALUE_MIN,
+            default=defaults.get(CONF_VALUE_MIN, DEFAULT_VALUE_MIN),
+        )
+    ] = value_selector
+    fields[
+        vol.Optional(
+            CONF_VALUE_MAX,
+            default=defaults.get(CONF_VALUE_MAX, DEFAULT_VALUE_MAX),
+        )
+    ] = value_selector
+    fields[_marker(CONF_UNIT, False, DEFAULT_UNIT)] = text_selector
+    fields[
+        vol.Optional(
+            CONF_MODE_ON_VALUE,
+            default=defaults.get(CONF_MODE_ON_VALUE, DEFAULT_MODE_ON_VALUE),
+        )
+    ] = value_selector
+    fields[
+        vol.Optional(
+            CONF_SAME_FOR_ALL_DAYS,
+            default=defaults.get(CONF_SAME_FOR_ALL_DAYS, False),
+        )
+    ] = boolean_selector
+    fields[_marker(CONF_MODE_OFF_NAME, False, DEFAULT_MODE_OFF_NAME)] = text_selector
+    fields[_marker(CONF_MODE_OFF_ICON, False, DEFAULT_MODE_OFF_ICON)] = icon_selector
+    fields[_marker(CONF_MODE_ON_NAME, False, DEFAULT_MODE_ON_NAME)] = text_selector
+    fields[_marker(CONF_MODE_ON_ICON, False, DEFAULT_MODE_ON_ICON)] = icon_selector
+    fields[_marker(CONF_MODE_AUTO_NAME, False, DEFAULT_MODE_AUTO_NAME)] = text_selector
+    fields[_marker(CONF_MODE_AUTO_ICON, False, DEFAULT_MODE_AUTO_ICON)] = icon_selector
+    return vol.Schema(fields)
+
+
+def _curve_validate(user_input: dict[str, Any]) -> None:
+    targets = user_input.get(CONF_TARGET_ENTITIES)
+    if isinstance(targets, str):
+        user_input[CONF_TARGET_ENTITIES] = [targets]
+    elif not isinstance(targets, list) or not targets:
+        raise vol.Invalid("targets_required")
+
+    for key, default in (
+        (CONF_MODE_OFF_NAME, DEFAULT_MODE_OFF_NAME),
+        (CONF_MODE_ON_NAME, DEFAULT_MODE_ON_NAME),
+        (CONF_MODE_AUTO_NAME, DEFAULT_MODE_AUTO_NAME),
+    ):
+        value = user_input.get(key)
+        if not isinstance(value, str) or not value.strip():
+            user_input[key] = default
+        else:
+            user_input[key] = value.strip()
+
+    names = {
+        user_input[CONF_MODE_OFF_NAME],
+        user_input[CONF_MODE_ON_NAME],
+        user_input[CONF_MODE_AUTO_NAME],
+    }
+    if len(names) != 3:
+        raise vol.Invalid("duplicate_mode_names")
+
+    try:
+        v_min = float(user_input.get(CONF_VALUE_MIN, DEFAULT_VALUE_MIN))
+        v_max = float(user_input.get(CONF_VALUE_MAX, DEFAULT_VALUE_MAX))
+    except (TypeError, ValueError):
+        raise vol.Invalid("invalid_range")
+    if v_max <= v_min:
+        raise vol.Invalid("invalid_range")
+    user_input[CONF_VALUE_MIN] = v_min
+    user_input[CONF_VALUE_MAX] = v_max
+
+    try:
+        interval = int(user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL))
+    except (TypeError, ValueError):
+        interval = DEFAULT_UPDATE_INTERVAL
+    user_input[CONF_UPDATE_INTERVAL] = max(1, interval)
+
+
 def _timer_validate(user_input: dict[str, Any]) -> None:
     name = user_input.get(CONF_NAME)
     if isinstance(name, str):
@@ -341,7 +480,7 @@ class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
         """Top-level menu: pick the helper kind."""
         return self.async_show_menu(
             step_id="user",
-            menu_options=["schedule", "timer"],
+            menu_options=["schedule", "timer", "curve"],
         )
 
     # --- Schedule branch ---
@@ -365,6 +504,30 @@ class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="schedule",
             data_schema=_schedule_schema(user_input),
+            errors=errors,
+        )
+
+    # --- Curve branch ---
+
+    async def async_step_curve(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                _curve_validate(user_input)
+            except vol.Invalid as err:
+                errors["base"] = str(err)
+            else:
+                user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_CURVE
+                title = str(user_input.get(CONF_NAME) or "").strip() or "Smart Curve"
+                return self.async_create_entry(
+                    title=title, data={}, options=user_input
+                )
+
+        return self.async_show_form(
+            step_id="curve",
+            data_schema=_curve_schema(user_input),
             errors=errors,
         )
 
@@ -456,7 +619,29 @@ class PowerPilzCompanionOptionsFlow(OptionsFlow):
         )
         if entry_type == ENTRY_TYPE_TIMER:
             return await self.async_step_timer()
+        if entry_type == ENTRY_TYPE_CURVE:
+            return await self.async_step_curve()
         return await self.async_step_schedule()
+
+    async def async_step_curve(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                _curve_validate(user_input)
+            except vol.Invalid as err:
+                errors["base"] = str(err)
+            else:
+                user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_CURVE
+                return self.async_create_entry(title="", data=user_input)
+
+        defaults = {**self._entry.options, **(user_input or {})}
+        return self.async_show_form(
+            step_id="curve",
+            data_schema=_curve_schema(defaults),
+            errors=errors,
+        )
 
     async def async_step_schedule(
         self, user_input: dict[str, Any] | None = None

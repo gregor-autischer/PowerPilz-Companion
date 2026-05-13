@@ -30,17 +30,21 @@ from .const import (
     CONF_ENTRY_TYPE,
     CONF_LINKED_SCHEDULE,
     DOMAIN,
+    ENTRY_TYPE_CURVE,
     ENTRY_TYPE_SCHEDULE,
     ENTRY_TYPE_TIMER,
+    SERVICE_SET_CURVE_POINTS,
     SERVICE_SET_SCHEDULE_BLOCKS,
     SERVICE_SET_TIMER,
     WEEKDAY_KEYS,
 )
 from .storage import (
+    async_delete_curve_entry as async_delete_curve_storage_entry,
     async_delete_entry as async_delete_storage_entry,
     async_load_blocks,
     async_migrate_from_schedule_entity,
     async_save_blocks,
+    async_save_curve,
 )
 
 CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
@@ -49,8 +53,11 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _platforms_for(entry: ConfigEntry) -> list[Platform]:
-    if entry.options.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_TIMER:
+    entry_type = entry.options.get(CONF_ENTRY_TYPE)
+    if entry_type == ENTRY_TYPE_TIMER:
         return [Platform.SWITCH]
+    if entry_type == ENTRY_TYPE_CURVE:
+        return [Platform.SELECT, Platform.SENSOR]
     return [Platform.SELECT, Platform.BINARY_SENSOR]
 
 
@@ -100,6 +107,30 @@ SET_SCHEDULE_BLOCKS_SCHEMA = vol.Schema(
 )
 
 
+_CURVE_DAY_SCHEMA = vol.Schema(
+    [
+        vol.Schema(
+            {
+                vol.Required("time"): cv.string,
+                vol.Required("value"): vol.Coerce(float),
+            },
+            extra=vol.REMOVE_EXTRA,
+        )
+    ]
+)
+
+
+SET_CURVE_POINTS_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("points"): vol.Schema(
+            {vol.Optional(day): _CURVE_DAY_SCHEMA for day in WEEKDAY_KEYS},
+            extra=vol.REMOVE_EXTRA,
+        ),
+    }
+)
+
+
 def _parse_service_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
@@ -131,8 +162,8 @@ def _parse_service_datetime(value: Any) -> datetime | None:
 def _find_schedule_entity_for(
     hass: HomeAssistant, entity_id: str
 ) -> tuple[ConfigEntry | None, Any | None]:
-    """Given the entity_id of a Smart Schedule select, return the entry
-    and live entity object, or (None, None) if it can't be resolved."""
+    """Given the entity_id of a Smart Schedule / Curve select, return the
+    entry and live entity object, or (None, None) if it can't be resolved."""
     registry = er.async_get(hass)
     entry_reg = registry.async_get(entity_id)
     if not entry_reg or entry_reg.platform != DOMAIN or not entry_reg.config_entry_id:
@@ -229,6 +260,28 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
                 entity_id,
             )
 
+    async def handle_set_curve_points(call: ServiceCall) -> None:
+        entity_id: str = call.data["entity_id"]
+        points: dict[str, list[dict[str, Any]]] = call.data["points"]
+
+        config_entry, entity = _find_schedule_entity_for(hass, entity_id)
+        if config_entry is None:
+            _LOGGER.warning(
+                "set_curve_points: %s is not a PowerPilz helper entity",
+                entity_id,
+            )
+            return
+
+        saved = await async_save_curve(hass, config_entry.entry_id, points)
+        if entity is not None and hasattr(entity, "async_update_points"):
+            await entity.async_update_points(saved)
+        else:
+            _LOGGER.debug(
+                "set_curve_points: entity for %s not live yet; points "
+                "persisted and will load on next setup.",
+                entity_id,
+            )
+
     hass.services.async_register(
         DOMAIN, SERVICE_SET_TIMER, handle_set_timer, schema=SET_TIMER_SCHEMA
     )
@@ -237,6 +290,12 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
         SERVICE_SET_SCHEDULE_BLOCKS,
         handle_set_schedule_blocks,
         schema=SET_SCHEDULE_BLOCKS_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_CURVE_POINTS,
+        handle_set_curve_points,
+        schema=SET_CURVE_POINTS_SCHEMA,
     )
     return True
 
@@ -249,7 +308,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # the entry still carries `linked_schedule` and our store doesn't
     # have blocks for it, read the native schedule helper and import
     # its weekly plan. Then clear the config reference.
-    if entry.options.get(CONF_ENTRY_TYPE, ENTRY_TYPE_SCHEDULE) == ENTRY_TYPE_SCHEDULE:
+    _entry_type = entry.options.get(CONF_ENTRY_TYPE, ENTRY_TYPE_SCHEDULE)
+    if _entry_type == ENTRY_TYPE_SCHEDULE:
         legacy_link = entry.options.get(CONF_LINKED_SCHEDULE) or entry.data.get(
             CONF_LINKED_SCHEDULE
         )
@@ -303,12 +363,22 @@ async def async_remove_entry(
 ) -> None:
     """Clean up side effects when a Smart helper is removed."""
     entry_type = entry.options.get(CONF_ENTRY_TYPE, ENTRY_TYPE_SCHEDULE)
-    if entry_type != ENTRY_TYPE_SCHEDULE:
-        return
 
-    try:
-        await async_delete_storage_entry(hass, entry.entry_id)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning(
-            "Failed to clean up schedule blocks for %s: %s", entry.title, err
-        )
+    if entry_type == ENTRY_TYPE_SCHEDULE:
+        try:
+            await async_delete_storage_entry(hass, entry.entry_id)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to clean up schedule blocks for %s: %s",
+                entry.title,
+                err,
+            )
+    elif entry_type == ENTRY_TYPE_CURVE:
+        try:
+            await async_delete_curve_storage_entry(hass, entry.entry_id)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "Failed to clean up curve points for %s: %s",
+                entry.title,
+                err,
+            )
