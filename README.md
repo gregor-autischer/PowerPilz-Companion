@@ -1,5 +1,7 @@
 # 🍄‍🟫 PowerPilz Companion
 
+[![hacs](https://img.shields.io/badge/hacs-custom-4f46e5?style=flat-square)](https://github.com/hacs/integration) [![version](https://img.shields.io/github/v/release/gregor-autischer/PowerPilz-Companion?sort=semver&style=flat-square&label=version&color=9a48d3)](https://github.com/gregor-autischer/PowerPilz-Companion/releases) [![downloads](https://img.shields.io/github/downloads/gregor-autischer/PowerPilz-Companion/total?color=ec4899&label=downloads&style=flat-square&cacheSeconds=3600)](https://github.com/gregor-autischer/PowerPilz-Companion/releases)
+
 A Home Assistant custom integration that adds two **Smart helper** types, each designed to collapse a multi-entity + bridging-automation setup into a single entity that drives your devices autonomously:
 
 - 🗓 **Smart Schedule** — a `select` entity with three override modes (Off / On / Auto) plus an accompanying `binary_sensor` that reflects whether the weekly plan is currently active. Weekly blocks are stored inside the integration itself; edit them directly in the PowerPilz Schedule Lovelace card (long-press).
