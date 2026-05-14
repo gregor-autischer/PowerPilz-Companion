@@ -23,6 +23,7 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -47,7 +48,7 @@ async def async_setup_entry(
     async_add_entities([SmartEventScheduleButton(entry)])
 
 
-class SmartEventScheduleButton(ButtonEntity):
+class SmartEventScheduleButton(ButtonEntity, RestoreEntity):
     """Trigger button for a Smart Event Schedule helper."""
 
     _attr_has_entity_name = False
@@ -74,6 +75,17 @@ class SmartEventScheduleButton(ButtonEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+
+        # Restore the last-fire timestamp so the state-history isn't
+        # interrupted by an HA restart.
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state not in (None, "", "unknown", "unavailable"):
+            try:
+                restored = datetime.fromisoformat(last_state.state)
+                self._last_fire_utc = restored
+            except (TypeError, ValueError):
+                pass
+
         bucket = self.hass.data.setdefault(DOMAIN, {})
         entry_data = bucket.setdefault(self._entry.entry_id, {})
         entry_data["trigger_button"] = self
