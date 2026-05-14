@@ -499,12 +499,14 @@ async def async_remove_entry(
     """Clean up side effects when a Smart helper is removed."""
     entry_type = entry.options.get(CONF_ENTRY_TYPE, ENTRY_TYPE_SCHEDULE)
 
-    if entry_type == ENTRY_TYPE_SCHEDULE:
+    if entry_type in (ENTRY_TYPE_SCHEDULE, ENTRY_TYPE_EVENT_SCHEDULE):
+        # Both blocks and events share the same Store; the same delete
+        # API removes the whole entry bucket (blocks + events).
         try:
             await async_delete_storage_entry(hass, entry.entry_id)
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
-                "Failed to clean up schedule blocks for %s: %s",
+                "Failed to clean up schedule storage for %s: %s",
                 entry.title,
                 err,
             )
