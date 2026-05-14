@@ -6,44 +6,62 @@
         "title": "PowerPilz Smart-Helfer",
         "description": "Welche Art von Helfer möchtest du anlegen?",
         "menu_options": {
-          "schedule": "Smart Zeitschaltuhr — Wochenplan mit Modus-Override",
-          "timer": "Smart Timer — einmaliges Ein/Aus zu einer bestimmten Zeit",
-          "curve": "Smart Heizkurve — Wochenkurve mit Sollwert-Verlauf"
+          "schedule": "Smart Zeitschaltuhr - wöchentliche Ein/Aus-Blöcke",
+          "event_schedule": "Smart Event-Zeitschaltuhr - wöchentliche Zeitpunkt-Trigger",
+          "timer": "Smart Timer - einmaliges Ein/Aus zu einer bestimmten Zeit",
+          "curve": "Smart Heizkurve - Wochenkurve mit Sollwert-Verlauf"
         }
       },
       "schedule": {
-        "title": "Smart Zeitschaltuhr",
-        "description": "Verbindet ein Zielgerät, Override-Modi und einen Wochenplan in einem Helfer.\n\nZwei Modi (unten bei 'Zeitplan-Typ' wählen):\n\n• BLÖCKE - klassischer Wochenplan. Du definierst Zeitfenster (z.B. Mo 18:00-22:00). Während eines Fensters bleibt das Gerät an, außerhalb aus. Manuelles Override über Auto/Ein/Aus möglich.\n\n• EVENTS - wöchentliche Zeitpunkt-Trigger. Du setzt einzelne Zeitpunkte (z.B. Mo 18:00). Zu jedem Zeitpunkt feuert die gewählte Event-Aktion (Toggle / Pulse / Eigener Service) auf das Zielgerät. Kein durchgehender Ein/Aus-Zustand.\n\nDer Wochenplan selbst wird in der PowerPilz-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet - lange auf die Karte drücken öffnet den Wochen-Editor.",
+        "title": "Smart Zeitschaltuhr (Blöcke)",
+        "description": "Klassischer Wochenplan. Du definierst Zeitfenster (z.B. Mo 18:00-22:00). Während eines Fensters bleibt das Zielgerät an, außerhalb aus.\n\nDrei Override-Modi: Aus (erzwingt aus), Ein (erzwingt an), Auto (folgt Plan). Optional 'Auto an nächster Grenze wiederherstellen' hebt ein manuelles Override beim nächsten Plan-Übergang auf.\n\nDer Wochenplan selbst wird in der PowerPilz-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet - lange auf die Karte drücken öffnet den Wochen-Editor.",
         "data": {
           "name": "Name",
           "target_entity": "Zielgerät",
-          "schedule_kind": "Zeitplan-Typ (Blöcke oder Events)",
-          "event_action": "[Events] Aktion pro Event",
-          "pulse_duration_seconds": "[Events / Pulse] Pulse-Dauer (Sekunden)",
-          "event_service": "[Events / Eigener Service] Service-Call",
-          "event_service_data": "[Events / Eigener Service] Zusätzliche Service-Daten",
           "mode_off_name": "Aus-Modus - Anzeigename",
           "mode_off_icon": "Aus-Modus - Symbol",
-          "mode_on_name": "[Blöcke] Ein-Modus - Anzeigename",
-          "mode_on_icon": "[Blöcke] Ein-Modus - Symbol",
+          "mode_on_name": "Ein-Modus - Anzeigename",
+          "mode_on_icon": "Ein-Modus - Symbol",
           "mode_auto_name": "Auto-Modus - Anzeigename",
           "mode_auto_icon": "Auto-Modus - Symbol",
-          "restore_auto_on_boundary": "[Blöcke] Auto an nächster Grenze automatisch wiederherstellen"
+          "restore_auto_on_boundary": "Auto an nächster Grenze automatisch wiederherstellen"
         },
         "data_description": {
-          "target_entity": "Wird in beiden Modi verwendet.\nBlöcke-Modus: Gerät wird während aktiver Zeitfenster eingeschaltet, außerhalb ausgeschaltet.\nEvents-Modus: Gerät empfängt die Event-Aktion (Toggle / Pulse / Eigener Service) zu jedem Event-Zeitpunkt.\nUnterstützte Domains: switch, light, input_boolean, fan, climate.",
-          "schedule_kind": "Bestimmt das Verhalten des Helfers.\n\nBlöcke: klassischer Wochenplan mit Zeitfenstern. Gerät ist innerhalb eines Fensters an, sonst aus. Geeignet für Heizung, Licht, alles mit durchgehendem Ein/Aus-Zustand.\n\nEvents: wöchentliche Trigger-Punkte. Gerät empfängt die gewählte Event-Aktion zu jedem Punkt. Kein durchgehender Zustand - gut für momentane Aktionen wie Türklingel-Impulse, Bewässerungsventile, Szenen-Aufrufe.",
-          "event_action": "Nur im Events-Modus aktiv. Bestimmt was zu jedem Event-Zeitpunkt passiert:\n\n• Toggle: ruft den eingebauten `homeassistant.toggle` auf dem Zielgerät auf. Schaltet den aktuellen Zustand um (aus -> an oder an -> aus). Einfacher Round-Robin-Schalter.\n\n• Pulse: schaltet das Gerät ein, wartet N Sekunden (unten einstellbar), schaltet es wieder aus. Selbe Sequenz bei jedem Event. Perfekt für Türklingeln, Garagentor-Taster, Bewässerungsventile, Treppenhaus-Licht, alles Momentane.\n\n• Eigener Service-Call: ruft einen beliebigen Home Assistant Service auf (siehe unten). Events können so Szenen aktivieren, Push-Notifications senden, Skripte starten, Media-Player ansteuern usw.",
-          "pulse_duration_seconds": "Nur bei 'Aktion pro Event' = Pulse aktiv. Anzahl Sekunden, die das Zielgerät an bleibt, bevor es wieder ausgeschaltet wird. Bereich 1-900 Sekunden (max 15 Minuten).\n\nNach jedem Pulse gibt es zusätzlich eine fixe 10-Sekunden-Sperre. Jeder weitere Trigger (geplant oder manueller 'Jetzt auslösen'-Klick auf der Karte) der während des Pulses oder der Sperre eintrifft, wird stillschweigend verworfen - so überlappen sich Pulses nie.",
-          "event_service": "Nur bei 'Aktion pro Event' = Eigener Service-Call aktiv. Der Home Assistant Service, der bei jedem Event aufgerufen wird, in der Form `domain.service`.\n\nBeispiele:\n• `scene.turn_on` - eine Szene aktivieren\n• `notify.mobile_app_pixel` - Push-Nachricht senden\n• `media_player.play_media` - Sound/Stream abspielen\n• `script.pflanzen_giessen` - ein Skript starten\n\nDas Zielgerät oben wird automatisch als `entity_id` an den Service-Call übergeben - im Daten-Feld unten musst du es nicht nochmal angeben.",
-          "event_service_data": "Nur bei Events / Eigener Service. Optionale Zusatzdaten, die mit dem Service-Call mitgesendet werden, als YAML/JSON-Objekt.\n\nLeer lassen wenn der Service keine extra Daten braucht (z.B. `scene.turn_on` funktioniert allein).\n\nBeispiele:\n\nnotify.mobile_app_pixel:\n  message: 'Zeit die Pflanzen zu gießen'\n  title: 'PowerPilz'\n\nmedia_player.play_media:\n  media_content_id: 'http://...'\n  media_content_type: 'music'\n\nentity_id wird automatisch aus dem Zielgerät gefüllt - hier nicht wiederholen.",
-          "mode_off_name": "Anzeigename für den Aus-Modus in Karte und HA-UI. Im Aus-Modus pausiert der Helfer: Blöcke-Modus erzwingt das Zielgerät aus; Events-Modus ignoriert geplante Events (manueller 'Jetzt auslösen'-Trigger funktioniert weiterhin).",
-          "mode_off_icon": "Symbol während der Helfer im Aus-Modus ist.",
-          "mode_on_name": "Nur Blöcke-Modus. Anzeigename für den Ein-Modus, der das Zielgerät dauerhaft an erzwingt - unabhängig vom Plan. Im Events-Modus ausgeblendet ('immer an' macht für Zeitpunkt-Events keinen Sinn).",
-          "mode_on_icon": "Nur Blöcke-Modus. Symbol während im Ein-Modus.",
-          "mode_auto_name": "Anzeigename für den Auto-Modus. Im Auto folgt der Helfer seinem Plan: Blöcke öffnen/schließen ihre Fenster, Events feuern zu ihren Zeitpunkten.",
+          "target_entity": "Das Gerät, das während aktiver Zeitfenster an bleibt und außerhalb aus. Unterstützt: switch, light, input_boolean, fan, climate.",
+          "mode_off_name": "Anzeigename für den Aus-Modus (erzwingt das Zielgerät dauerhaft aus).",
+          "mode_off_icon": "Symbol während im Aus-Modus.",
+          "mode_on_name": "Anzeigename für den Ein-Modus (erzwingt das Zielgerät dauerhaft an, unabhängig vom Plan).",
+          "mode_on_icon": "Symbol während im Ein-Modus.",
+          "mode_auto_name": "Anzeigename für den Auto-Modus (Zielgerät folgt dem Wochenplan).",
           "mode_auto_icon": "Symbol während im Auto-Modus.",
-          "restore_auto_on_boundary": "Nur Blöcke-Modus. Wenn aktiviert, wird ein manuelles Ein/Aus-Override automatisch aufgehoben, sobald die nächste Plan-Grenze (Block-Start oder -Ende) überschritten wird. Praktisch wenn du oft kurz übersteuerst, aber gern vergisst auf Auto zurückzustellen."
+          "restore_auto_on_boundary": "Wenn aktiviert, wird ein manuelles Ein/Aus-Override automatisch aufgehoben, sobald die nächste Plan-Grenze überschritten wird. Praktisch wenn du oft kurz übersteuerst, aber gerne vergisst auf Auto zurückzustellen."
+        }
+      },
+      "event_schedule": {
+        "title": "Smart Event-Zeitschaltuhr (Events)",
+        "description": "Wöchentliche Zeitpunkt-Trigger. Du setzt einzelne Zeitpunkte (z.B. Mo 18:00) und zu jedem Zeitpunkt feuert die gewählte Aktion auf das Zielgerät.\n\nDrei Aktions-Typen:\n• Toggle - ruft homeassistant.toggle auf das Zielgerät.\n• Pulse - schaltet ein, wartet N Sekunden, schaltet wieder aus.\n• Eigener Service-Call - ruft einen beliebigen HA-Service auf.\n\nZwei Modi: Aus (geplante Events werden ignoriert; manueller Trigger funktioniert weiter), Auto (Events feuern planmäßig).\n\nDer Helfer legt zusätzlich eine `button.*_trigger`-Entität an. Diese kannst du auf jeder Dashboard-Kachel platzieren - jeder Press feuert die Aktion, und die Button-History zeigt alle Fires (geplant + manuell) als einheitlichen Verlauf.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Zielgerät",
+          "event_action": "Aktion pro Event",
+          "pulse_duration_seconds": "Pulse-Dauer (Sekunden)",
+          "event_service": "Eigener Service-Call",
+          "event_service_data": "Service-Daten",
+          "mode_off_name": "Aus-Modus - Anzeigename",
+          "mode_off_icon": "Aus-Modus - Symbol",
+          "mode_auto_name": "Auto-Modus - Anzeigename",
+          "mode_auto_icon": "Auto-Modus - Symbol"
+        },
+        "data_description": {
+          "target_entity": "Das Gerät, das zu jedem Event-Zeitpunkt die Aktion empfängt. Unterstützt: switch, light, input_boolean, fan, climate.",
+          "event_action": "Was zu jedem Event-Zeitpunkt passiert:\n\n• Toggle: ruft homeassistant.toggle auf das Zielgerät. Schaltet den Zustand um (aus → an oder an → aus).\n\n• Pulse: schaltet ein, wartet die unten gesetzte Dauer, schaltet wieder aus. Perfekt für Türklingel, Garagentor-Taster, Bewässerungsventile, Treppenhaus-Licht - alles Momentane.\n\n• Eigener Service-Call: ruft einen beliebigen Home Assistant Service auf (siehe unten).",
+          "pulse_duration_seconds": "Nur bei Pulse aktiv. Sekunden, die das Zielgerät an bleibt (1-900, max 15 Min). Nach jedem Pulse 10s feste Sperre - überlappende Trigger werden verworfen.",
+          "event_service": "Nur bei Custom-Service. Service in der Form `domain.service`.\n\nBeispiele:\n• `scene.turn_on`\n• `notify.mobile_app_pixel`\n• `media_player.play_media`\n• `script.pflanzen_giessen`\n\nDas Zielgerät oben wird automatisch als `entity_id` mitgegeben.",
+          "event_service_data": "Optionale Zusatzdaten als YAML/JSON-Objekt. Leer lassen wenn der Service keine extra Daten braucht.\n\nBeispiele:\n\nnotify.mobile_app_pixel:\n  message: 'Zeit die Pflanzen zu gießen'\n  title: 'PowerPilz'\n\nmedia_player.play_media:\n  media_content_id: 'http://...'\n  media_content_type: 'music'\n\nentity_id wird automatisch aus dem Zielgerät gefüllt - hier nicht wiederholen.",
+          "mode_off_name": "Anzeigename für den Aus-Modus. Im Aus werden geplante Events ignoriert; der Begleit-Button feuert weiterhin manuell.",
+          "mode_off_icon": "Symbol während im Aus-Modus.",
+          "mode_auto_name": "Anzeigename für den Auto-Modus. Events feuern zu ihren geplanten Zeitpunkten.",
+          "mode_auto_icon": "Symbol während im Auto-Modus."
         }
       },
       "timer": {
@@ -122,33 +140,45 @@
   "options": {
     "step": {
       "schedule": {
-        "title": "Smart Zeitschaltuhr Einstellungen",
+        "title": "Smart Zeitschaltuhr (Blöcke) Einstellungen",
         "description": "Bearbeite die Helfer-Einstellungen. Der Wochenplan selbst wird in der PowerPilz-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet - lange auf die Karte drücken öffnet den Wochen-Editor.",
         "data": {
           "name": "Name",
-          "target_entity": "Zu steuerndes Gerät",
-          "schedule_kind": "Zeitplan-Typ (Blöcke oder Events)",
-          "event_action": "[Events] Aktion pro Event",
-          "pulse_duration_seconds": "[Events / Pulse] Pulse-Dauer (Sekunden)",
-          "event_service": "[Events / Eigener Service] Service-Call",
-          "event_service_data": "[Events / Eigener Service] Zusätzliche Service-Daten",
+          "target_entity": "Zielgerät",
           "mode_off_name": "Aus-Modus - Anzeigename",
           "mode_off_icon": "Aus-Modus - Symbol",
-          "mode_on_name": "[Blöcke] Ein-Modus - Anzeigename",
-          "mode_on_icon": "[Blöcke] Ein-Modus - Symbol",
+          "mode_on_name": "Ein-Modus - Anzeigename",
+          "mode_on_icon": "Ein-Modus - Symbol",
           "mode_auto_name": "Auto-Modus - Anzeigename",
           "mode_auto_icon": "Auto-Modus - Symbol",
-          "restore_auto_on_boundary": "[Blöcke] Auto an nächster Grenze automatisch wiederherstellen"
+          "restore_auto_on_boundary": "Auto an nächster Grenze automatisch wiederherstellen"
         },
         "data_description": {
-          "target_entity": "Wird in beiden Modi verwendet.\nBlöcke-Modus: an während aktiver Zeitfenster, sonst aus.\nEvents-Modus: empfängt die Event-Aktion (Toggle / Pulse / Eigener Service) zu jedem Event-Zeitpunkt.",
-          "schedule_kind": "Blöcke: klassischer Wochenplan mit Zeitfenstern.\nEvents: Zeitpunkt-Trigger pro Woche, jeder feuert die gewählte Aktion.",
-          "event_action": "Nur im Events-Modus aktiv.\n• Toggle: ruft homeassistant.toggle auf das Ziel.\n• Pulse: turn_on -> N Sekunden warten -> turn_off.\n• Eigener Service-Call: ruft einen beliebigen HA-Service auf.",
-          "pulse_duration_seconds": "Nur Pulse. Sekunden, die das Ziel an bleibt (1-900). Fixe 10s-Sperre nach jedem Pulse verwirft überlappende Trigger.",
-          "event_service": "Nur Eigener Service. Service in der Form `domain.service` (z.B. scene.turn_on). Zielgerät wird automatisch als entity_id übergeben.",
-          "event_service_data": "Nur Eigener Service. Optionale Zusatzdaten als Dict. entity_id wird automatisch gefüllt - nicht wiederholen.",
-          "mode_on_name": "Nur Blöcke-Modus. Im Events-Modus ausgeblendet.",
-          "restore_auto_on_boundary": "Nur Blöcke-Modus. Manuelles Ein/Aus-Override wird bei der nächsten Plan-Grenze automatisch aufgehoben."
+          "target_entity": "Das Gerät, das während aktiver Zeitfenster an bleibt und außerhalb aus.",
+          "restore_auto_on_boundary": "Manuelles Ein/Aus-Override wird bei der nächsten Plan-Grenze automatisch aufgehoben."
+        }
+      },
+      "event_schedule": {
+        "title": "Smart Event-Zeitschaltuhr (Events) Einstellungen",
+        "description": "Bearbeite die Helfer-Einstellungen. Die Wochen-Events werden in der PowerPilz-Event-Zeitschaltuhr-Karte auf deinem Dashboard bearbeitet - lange auf die Karte drücken öffnet den Editor.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Zielgerät",
+          "event_action": "Aktion pro Event",
+          "pulse_duration_seconds": "Pulse-Dauer (Sekunden)",
+          "event_service": "Eigener Service-Call",
+          "event_service_data": "Service-Daten",
+          "mode_off_name": "Aus-Modus - Anzeigename",
+          "mode_off_icon": "Aus-Modus - Symbol",
+          "mode_auto_name": "Auto-Modus - Anzeigename",
+          "mode_auto_icon": "Auto-Modus - Symbol"
+        },
+        "data_description": {
+          "target_entity": "Das Gerät, das zu jedem Event-Zeitpunkt die Aktion empfängt.",
+          "event_action": "Toggle, Pulse oder Eigener Service.",
+          "pulse_duration_seconds": "Nur Pulse. Sekunden, die das Ziel an bleibt (1-900). Fixe 10s-Sperre nach jedem Pulse.",
+          "event_service": "Nur Eigener Service. Service in der Form `domain.service`. entity_id wird automatisch aus dem Zielgerät übergeben.",
+          "event_service_data": "Nur Eigener Service. Optionale Zusatzdaten als Dict."
         }
       },
       "timer": {

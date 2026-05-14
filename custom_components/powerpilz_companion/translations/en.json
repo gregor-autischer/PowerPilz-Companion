@@ -6,44 +6,62 @@
         "title": "PowerPilz Smart Helpers",
         "description": "Pick the kind of helper you want to create.",
         "menu_options": {
-          "schedule": "Smart Schedule — weekly plan with mode override",
-          "timer": "Smart Timer — one-shot on/off at a specific time",
-          "curve": "Smart Curve — heating curve with weekly setpoint shape"
+          "schedule": "Smart Schedule - weekly blocks of on/off windows",
+          "event_schedule": "Smart Event Schedule - weekly point-in-time triggers",
+          "timer": "Smart Timer - one-shot on/off at a specific time",
+          "curve": "Smart Curve - heating curve with weekly setpoint shape"
         }
       },
       "schedule": {
-        "title": "Smart Schedule",
-        "description": "Bundles a target device, override modes and a weekly plan in one helper.\n\nTwo modes (pick below as 'Schedule kind'):\n\n• BLOCKS - classic weekly schedule. You define time windows (e.g. Mon 18:00-22:00). During each window the target is held on; outside it is held off. Manual Auto/On/Off override possible.\n\n• EVENTS - weekly point-in-time triggers. You set moments (e.g. Mon 18:00). At each moment the chosen Event action (Toggle / Pulse / Custom service) fires on the target. No continuous on/off state.\n\nThe weekly plan itself is edited directly in the PowerPilz Schedule card on your dashboard - long-press the card to open the weekly editor.",
+        "title": "Smart Schedule (blocks)",
+        "description": "Classic weekly schedule. You define time windows (e.g. Mon 18:00-22:00). During each window the target is held on; outside the windows it is held off.\n\nThree override modes: Off (force off), On (force on), Auto (follow plan). Optional 'resume Auto at boundary' lifts a manual override at the next plan transition.\n\nThe weekly plan itself is edited in the PowerPilz Schedule card on your dashboard - long-press the card to open the weekly editor.",
         "data": {
           "name": "Name",
           "target_entity": "Target device",
-          "schedule_kind": "Schedule kind (Blocks or Events)",
-          "event_action": "[Events] Action at each event",
-          "pulse_duration_seconds": "[Events / Pulse] Pulse duration (seconds)",
-          "event_service": "[Events / Custom] Service to call",
-          "event_service_data": "[Events / Custom] Additional service data",
           "mode_off_name": "Off mode - display name",
           "mode_off_icon": "Off mode - icon",
-          "mode_on_name": "[Blocks] On mode - display name",
-          "mode_on_icon": "[Blocks] On mode - icon",
+          "mode_on_name": "On mode - display name",
+          "mode_on_icon": "On mode - icon",
           "mode_auto_name": "Auto mode - display name",
           "mode_auto_icon": "Auto mode - icon",
-          "restore_auto_on_boundary": "[Blocks] Auto-resume Auto mode at next boundary"
+          "restore_auto_on_boundary": "Auto-resume Auto mode at next boundary"
         },
         "data_description": {
-          "target_entity": "Used in both modes.\nBlocks mode: switched on during active time windows, off outside.\nEvents mode: receives the Event action (Toggle / Pulse / Custom service) at each event moment.\nSupported domains: switch, light, input_boolean, fan, climate.",
-          "schedule_kind": "Decides how this helper behaves.\n\nBlocks: classic weekly schedule with time windows. Target is on inside a window, off outside. Best for heating, lights, anything with a continuous on/off state.\n\nEvents: weekly trigger points. Target receives the chosen Event action at each point. No continuous state - good for momentary actions like doorbell pulses, watering valves, scene calls.",
-          "event_action": "Only used in Events mode. Defines what happens at each event time:\n\n• Toggle: calls the built-in `homeassistant.toggle` on the target. Flips its current state (off -> on or on -> off). Simple round-robin behaviour.\n\n• Pulse: turns the target on, waits N seconds (set below), turns it off again. Same sequence every time. Perfect for doorbells, garage door buttons, watering valves, stairwell lights, anything momentary.\n\n• Custom service call: calls any Home Assistant service you choose (see below). Lets events fire scenes, notifications, scripts, media players, etc.",
-          "pulse_duration_seconds": "Only used when 'Action at each event' is set to Pulse. The number of seconds the target stays on before it is turned off again. Range 1-900 seconds (max 15 minutes).\n\nAfter each pulse a fixed 10-second cool-down kicks in. Any further trigger (scheduled or manual 'Trigger now' from the card) arriving during the pulse or during the cool-down is silently discarded, so pulses never overlap.",
-          "event_service": "Only used when 'Action at each event' is set to Custom service call. The Home Assistant service to invoke at every event, in `domain.service` form.\n\nExamples:\n• `scene.turn_on` - activate a scene\n• `notify.mobile_app_pixel` - send a push notification\n• `media_player.play_media` - play a sound/stream\n• `script.water_plants` - run a script\n\nThe Target device above is automatically passed as `entity_id` to the service call - you do not need to set it again in the data field below.",
-          "event_service_data": "Only used in Events / Custom service. Optional extra payload sent with the service call, as a YAML/JSON object.\n\nLeave empty if the service doesn't need extra data (e.g. `scene.turn_on` works fine alone).\n\nExamples:\n\nnotify.mobile_app_pixel:\n  message: 'Time to water the plants'\n  title: 'PowerPilz'\n\nmedia_player.play_media:\n  media_content_id: 'http://...'\n  media_content_type: 'music'\n\nentity_id is auto-filled from the Target device - don't repeat it here.",
-          "mode_off_name": "Display name shown for the Off mode in the card and HA UI. In Off mode the helper is paused: Blocks mode forces the target off; Events mode ignores scheduled events (manual 'Trigger now' still works).",
-          "mode_off_icon": "Icon shown while the helper is in Off mode.",
-          "mode_on_name": "Blocks mode only. Display name for the On mode, which forces the target permanently on regardless of the plan. Hidden in Events mode (an 'always on' state has no meaning for point-in-time events).",
-          "mode_on_icon": "Blocks mode only. Icon shown while in On mode.",
-          "mode_auto_name": "Display name for the Auto mode. In Auto the helper follows its plan: Blocks open/close their windows, Events fire at their times.",
+          "target_entity": "The device to hold on during active windows and off outside. Supported: switch, light, input_boolean, fan, climate.",
+          "mode_off_name": "Display name for the Off mode (forces the target permanently off).",
+          "mode_off_icon": "Icon shown while in Off mode.",
+          "mode_on_name": "Display name for the On mode (forces the target permanently on, ignoring the plan).",
+          "mode_on_icon": "Icon shown while in On mode.",
+          "mode_auto_name": "Display name for the Auto mode (target follows the weekly plan).",
           "mode_auto_icon": "Icon shown while in Auto mode.",
-          "restore_auto_on_boundary": "Blocks mode only. If enabled, a manual On/Off override is lifted automatically at the next plan boundary (block start or end). Handy if you frequently override short-term but tend to forget switching back to Auto."
+          "restore_auto_on_boundary": "If enabled, a manual On/Off override is lifted automatically at the next plan boundary. Handy if you often override short-term but forget to switch back to Auto."
+        }
+      },
+      "event_schedule": {
+        "title": "Smart Event Schedule (events)",
+        "description": "Weekly point-in-time triggers. You set moments (e.g. Mon 18:00) and at each moment the helper fires the chosen action on the target device.\n\nThree action kinds:\n• Toggle - calls homeassistant.toggle on the target.\n• Pulse - turns target on, waits N seconds, turns it off again.\n• Custom service - calls any HA service you choose.\n\nTwo modes: Off (ignore scheduled events; manual trigger still works), Auto (events fire on schedule).\n\nThe helper also creates a companion `button.*_trigger` entity. Press it from any dashboard tile to fire the action manually - the button's history records every fire (scheduled or manual) as a single timeline.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Target device",
+          "event_action": "Action at each event",
+          "pulse_duration_seconds": "Pulse duration (seconds)",
+          "event_service": "Custom service call",
+          "event_service_data": "Custom service data",
+          "mode_off_name": "Off mode - display name",
+          "mode_off_icon": "Off mode - icon",
+          "mode_auto_name": "Auto mode - display name",
+          "mode_auto_icon": "Auto mode - icon"
+        },
+        "data_description": {
+          "target_entity": "The device that receives the action at each event time. Supported: switch, light, input_boolean, fan, climate.",
+          "event_action": "What happens at every event moment:\n\n• Toggle: calls homeassistant.toggle on the target. Flips its current state (off → on or on → off).\n\n• Pulse: turns the target on, waits the duration set below, turns it off again. Perfect for doorbells, garage door buttons, watering valves, stairwell lights - anything momentary.\n\n• Custom service call: calls any Home Assistant service you choose (see below).",
+          "pulse_duration_seconds": "Only used when action is Pulse. Seconds the target stays on (1-900, max 15 min). After each pulse a fixed 10s cool-down silently drops any further trigger (scheduled or manual) so pulses never overlap.",
+          "event_service": "Only used when action is Custom service call. Service in `domain.service` form.\n\nExamples:\n• `scene.turn_on`\n• `notify.mobile_app_pixel`\n• `media_player.play_media`\n• `script.water_plants`\n\nThe Target device above is automatically passed as `entity_id` to the call.",
+          "event_service_data": "Optional extra payload as YAML/JSON object. Leave empty if the service needs no extra data.\n\nExamples:\n\nnotify.mobile_app_pixel:\n  message: 'Time to water the plants'\n  title: 'PowerPilz'\n\nmedia_player.play_media:\n  media_content_id: 'http://...'\n  media_content_type: 'music'\n\nentity_id is auto-filled from the Target device - don't repeat it here.",
+          "mode_off_name": "Display name for the Off mode. In Off the scheduled events are ignored; the companion button still fires manually.",
+          "mode_off_icon": "Icon shown while in Off mode.",
+          "mode_auto_name": "Display name for the Auto mode. Events fire at their scheduled times.",
+          "mode_auto_icon": "Icon shown while in Auto mode."
         }
       },
       "timer": {
@@ -122,33 +140,45 @@
   "options": {
     "step": {
       "schedule": {
-        "title": "Smart Schedule options",
+        "title": "Smart Schedule (blocks) options",
         "description": "Adjust the helper settings. The weekly plan itself is edited in the PowerPilz Schedule card on your dashboard - long-press the card to open the weekly editor.",
         "data": {
           "name": "Name",
-          "target_entity": "Device to control",
-          "schedule_kind": "Schedule kind (Blocks or Events)",
-          "event_action": "[Events] Action at each event",
-          "pulse_duration_seconds": "[Events / Pulse] Pulse duration (seconds)",
-          "event_service": "[Events / Custom] Service to call",
-          "event_service_data": "[Events / Custom] Additional service data",
+          "target_entity": "Target device",
           "mode_off_name": "Off mode - display name",
           "mode_off_icon": "Off mode - icon",
-          "mode_on_name": "[Blocks] On mode - display name",
-          "mode_on_icon": "[Blocks] On mode - icon",
+          "mode_on_name": "On mode - display name",
+          "mode_on_icon": "On mode - icon",
           "mode_auto_name": "Auto mode - display name",
           "mode_auto_icon": "Auto mode - icon",
-          "restore_auto_on_boundary": "[Blocks] Auto-resume Auto mode at next boundary"
+          "restore_auto_on_boundary": "Auto-resume Auto mode at next boundary"
         },
         "data_description": {
-          "target_entity": "Used in both modes.\nBlocks mode: switched on during active time windows, off outside.\nEvents mode: receives the Event action (Toggle / Pulse / Custom service) at each event moment.",
-          "schedule_kind": "Blocks: classic time-window plan with on/off boundaries.\nEvents: weekly point-in-time triggers, each fires the chosen action.",
-          "event_action": "Only used in Events mode.\n• Toggle: calls homeassistant.toggle on target.\n• Pulse: turn_on -> wait N seconds -> turn_off.\n• Custom service call: invokes any HA service you choose.",
-          "pulse_duration_seconds": "Pulse only. Seconds the target stays on (1-900). A fixed 10s cool-down after each pulse drops overlapping triggers.",
-          "event_service": "Custom only. Service in `domain.service` form (e.g. scene.turn_on). Target device is auto-passed as entity_id.",
-          "event_service_data": "Custom only. Optional extra service-data dict. entity_id is auto-filled - don't repeat it.",
-          "mode_on_name": "Blocks mode only. Hidden in Events mode.",
-          "restore_auto_on_boundary": "Blocks mode only. A manual On/Off override is automatically lifted at the next plan boundary."
+          "target_entity": "The device that's held on during active windows and off outside.",
+          "restore_auto_on_boundary": "A manual On/Off override is automatically lifted at the next plan boundary."
+        }
+      },
+      "event_schedule": {
+        "title": "Smart Event Schedule (events) options",
+        "description": "Adjust the helper settings. The weekly events are edited in the PowerPilz Event Schedule card on your dashboard - long-press the card to open the editor.",
+        "data": {
+          "name": "Name",
+          "target_entity": "Target device",
+          "event_action": "Action at each event",
+          "pulse_duration_seconds": "Pulse duration (seconds)",
+          "event_service": "Custom service call",
+          "event_service_data": "Custom service data",
+          "mode_off_name": "Off mode - display name",
+          "mode_off_icon": "Off mode - icon",
+          "mode_auto_name": "Auto mode - display name",
+          "mode_auto_icon": "Auto mode - icon"
+        },
+        "data_description": {
+          "target_entity": "The device that receives the action at each event moment.",
+          "event_action": "Toggle, Pulse, or Custom service.",
+          "pulse_duration_seconds": "Pulse only. Seconds the target stays on (1-900). 10s fixed cool-down after each pulse.",
+          "event_service": "Custom only. Service in `domain.service` form. entity_id is auto-passed from the target above.",
+          "event_service_data": "Custom only. Optional extra service-data dict."
         }
       },
       "timer": {
