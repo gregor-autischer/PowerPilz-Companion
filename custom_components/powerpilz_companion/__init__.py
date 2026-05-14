@@ -29,10 +29,13 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_ENTRY_TYPE,
     CONF_LINKED_SCHEDULE,
+    CONF_SCHEDULE_KIND,
     DOMAIN,
     ENTRY_TYPE_CURVE,
+    ENTRY_TYPE_EVENT_SCHEDULE,
     ENTRY_TYPE_SCHEDULE,
     ENTRY_TYPE_TIMER,
+    SCHEDULE_KIND_EVENTS,
     SERVICE_SET_CURVE_POINTS,
     SERVICE_SET_SCHEDULE_BLOCKS,
     SERVICE_SET_SCHEDULE_EVENTS,
@@ -61,7 +64,54 @@ def _platforms_for(entry: ConfigEntry) -> list[Platform]:
         return [Platform.SWITCH]
     if entry_type == ENTRY_TYPE_CURVE:
         return [Platform.SELECT, Platform.SENSOR]
+    if entry_type == ENTRY_TYPE_EVENT_SCHEDULE:
+        return [Platform.SELECT, Platform.BUTTON]
     return [Platform.SELECT, Platform.BINARY_SENSOR]
+
+
+def _migrate_legacy_event_schedule_entry(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> bool:
+    """One-shot migration for entries created before the schedule split.
+
+    Before the split, events-mode helpers had `entry_type == "schedule"`
+    plus `options.schedule_kind == "events"`. This routine flips them to
+    the new `entry_type == "event_schedule"` and strips the legacy
+    `schedule_kind` field. Idempotent: safe to call on every startup.
+
+    Side-effect: drops the now-orphan `binary_sensor.*_active` entry
+    from the entity registry (the binary_sensor platform is no longer
+    loaded for event_schedule helpers).
+
+    Returns True if the entry was migrated.
+    """
+    options = dict(entry.options or {})
+    is_legacy_events = (
+        options.get(CONF_ENTRY_TYPE) == ENTRY_TYPE_SCHEDULE
+        and options.get(CONF_SCHEDULE_KIND) == SCHEDULE_KIND_EVENTS
+    )
+    if not is_legacy_events:
+        return False
+    options[CONF_ENTRY_TYPE] = ENTRY_TYPE_EVENT_SCHEDULE
+    options.pop(CONF_SCHEDULE_KIND, None)
+    hass.config_entries.async_update_entry(entry, options=options)
+
+    # Drop the orphan binary_sensor.*_active — event_schedule has no
+    # binary_sensor platform, so the entity would stay "unavailable".
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.platform == DOMAIN and reg_entry.entity_id.startswith("binary_sensor."):
+            registry.async_remove(reg_entry.entity_id)
+            _LOGGER.info(
+                "Removed legacy %s for migrated event_schedule",
+                reg_entry.entity_id,
+            )
+
+    _LOGGER.info(
+        "Migrated %s to event_schedule entry type",
+        entry.title,
+    )
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +432,12 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
+
+    # One-shot migration: legacy entries with schedule_kind=events get
+    # promoted to the new ENTRY_TYPE_EVENT_SCHEDULE entry type. After
+    # this, _platforms_for returns the right platforms (incl. BUTTON)
+    # and the binary_sensor platform is no longer loaded for them.
+    _migrate_legacy_event_schedule_entry(hass, entry)
 
     # One-shot migration from the legacy v0.3 linked-schedule model: if
     # the entry still carries `linked_schedule` and our store doesn't
