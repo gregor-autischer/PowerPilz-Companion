@@ -95,14 +95,17 @@ CONF_MODE_AUTO_ICON = "mode_auto_icon"
 
 CONF_RESTORE_AUTO_ON_BOUNDARY = "restore_auto_on_boundary"
 
-# --- Legacy schedule-kind discriminator (kept for migration only) ---
-# Before the split, Smart Schedule had two modes in one entry, picked
-# via `schedule_kind`. Helpers created in that era migrate on startup
-# to the new `ENTRY_TYPE_EVENT_SCHEDULE` entry type — see
+# --- Schedule-kind discriminator ---
+# `CONF_SCHEDULE_KIND` is the legacy config-options key that was used
+# before the split. It survives only as a migration marker — see
 # `_migrate_legacy_event_schedule_entry` in __init__.py.
-CONF_SCHEDULE_KIND = "schedule_kind"  # legacy
-SCHEDULE_KIND_BLOCKS = "blocks"       # legacy
-SCHEDULE_KIND_EVENTS = "events"       # legacy
+# The constants `SCHEDULE_KIND_BLOCKS` / `SCHEDULE_KIND_EVENTS` are
+# however still emitted as live entity attribute values (see
+# `ATTR_SCHEDULE_KIND` below) so the frontend can distinguish which
+# select-entity it's looking at without reading the config entry.
+CONF_SCHEDULE_KIND = "schedule_kind"  # legacy config key
+SCHEDULE_KIND_BLOCKS = "blocks"
+SCHEDULE_KIND_EVENTS = "events"
 
 # Event action — what happens at each event firing time.
 CONF_EVENT_ACTION = "event_action"
