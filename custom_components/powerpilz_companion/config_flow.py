@@ -43,7 +43,6 @@ from .const import (
     CONF_PULSE_DURATION,
     CONF_RESTORE_AUTO_ON_BOUNDARY,
     CONF_SAME_FOR_ALL_DAYS,
-    CONF_SCHEDULE_KIND,
     CONF_STATE_ACTIVE_ICON,
     CONF_STATE_ACTIVE_NAME,
     CONF_STATE_INACTIVE_ICON,
@@ -66,7 +65,6 @@ from .const import (
     DEFAULT_MODE_ON_NAME,
     DEFAULT_MODE_ON_VALUE,
     DEFAULT_PULSE_DURATION,
-    DEFAULT_SCHEDULE_KIND,
     DEFAULT_STATE_ACTIVE_ICON,
     DEFAULT_STATE_ACTIVE_NAME,
     DEFAULT_STATE_INACTIVE_ICON,
@@ -78,6 +76,7 @@ from .const import (
     DEFAULT_VALUE_MIN,
     DOMAIN,
     ENTRY_TYPE_CURVE,
+    ENTRY_TYPE_EVENT_SCHEDULE,
     ENTRY_TYPE_SCHEDULE,
     ENTRY_TYPE_TIMER,
     EVENT_ACTION_CUSTOM,
@@ -85,8 +84,6 @@ from .const import (
     EVENT_ACTION_TOGGLE,
     MAX_PULSE_DURATION,
     MIN_PULSE_DURATION,
-    SCHEDULE_KIND_BLOCKS,
-    SCHEDULE_KIND_EVENTS,
     TIMER_DIRECTION_BOTH,
     TIMER_DIRECTION_OFF_ONLY,
     TIMER_DIRECTION_ON_ONLY,
@@ -102,6 +99,7 @@ from .const import (
 def _schedule_schema(
     defaults: Mapping[str, Any] | None = None,
 ) -> vol.Schema:
+    """Blocks-mode Smart Schedule helper config."""
     defaults = defaults or {}
 
     target_selector = selector.EntitySelector(
@@ -112,21 +110,71 @@ def _schedule_schema(
     icon_selector = selector.IconSelector(selector.IconSelectorConfig())
     text_selector = selector.TextSelector(selector.TextSelectorConfig())
     boolean_selector = selector.BooleanSelector()
-    kind_selector = selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            mode=selector.SelectSelectorMode.DROPDOWN,
-            options=[
-                selector.SelectOptionDict(
-                    value=SCHEDULE_KIND_BLOCKS,
-                    label="Blocks (time windows)",
-                ),
-                selector.SelectOptionDict(
-                    value=SCHEDULE_KIND_EVENTS,
-                    label="Events (point-in-time triggers)",
-                ),
-            ],
+
+    def _marker(key: str, required: bool, fallback: Any = None) -> Any:
+        current = defaults.get(key, fallback)
+        mk = vol.Required if required else vol.Optional
+        if current in (None, "", []):
+            return mk(key)
+        return mk(key, default=current)
+
+    fields: dict[Any, Any] = {}
+    fields[_marker(CONF_NAME, True, "")] = text_selector
+    fields[_marker(CONF_TARGET_ENTITY, True)] = target_selector
+    fields[_marker(CONF_MODE_OFF_NAME, False, DEFAULT_MODE_OFF_NAME)] = text_selector
+    fields[_marker(CONF_MODE_OFF_ICON, False, DEFAULT_MODE_OFF_ICON)] = icon_selector
+    fields[_marker(CONF_MODE_ON_NAME, False, DEFAULT_MODE_ON_NAME)] = text_selector
+    fields[_marker(CONF_MODE_ON_ICON, False, DEFAULT_MODE_ON_ICON)] = icon_selector
+    fields[_marker(CONF_MODE_AUTO_NAME, False, DEFAULT_MODE_AUTO_NAME)] = text_selector
+    fields[_marker(CONF_MODE_AUTO_ICON, False, DEFAULT_MODE_AUTO_ICON)] = icon_selector
+    fields[
+        vol.Optional(
+            CONF_RESTORE_AUTO_ON_BOUNDARY,
+            default=defaults.get(CONF_RESTORE_AUTO_ON_BOUNDARY, True),
+        )
+    ] = boolean_selector
+    return vol.Schema(fields)
+
+
+def _schedule_validate(user_input: dict[str, Any]) -> None:
+    for key, default in (
+        (CONF_MODE_OFF_NAME, DEFAULT_MODE_OFF_NAME),
+        (CONF_MODE_ON_NAME, DEFAULT_MODE_ON_NAME),
+        (CONF_MODE_AUTO_NAME, DEFAULT_MODE_AUTO_NAME),
+    ):
+        value = user_input.get(key)
+        if not isinstance(value, str) or not value.strip():
+            user_input[key] = default
+        else:
+            user_input[key] = value.strip()
+
+    names = {
+        user_input[CONF_MODE_OFF_NAME],
+        user_input[CONF_MODE_ON_NAME],
+        user_input[CONF_MODE_AUTO_NAME],
+    }
+    if len(names) != 3:
+        raise vol.Invalid("duplicate_mode_names")
+
+
+# ---------------------------------------------------------------------------
+# Event Schedule schema + validation (point-in-time triggers)
+# ---------------------------------------------------------------------------
+
+
+def _event_schedule_schema(
+    defaults: Mapping[str, Any] | None = None,
+) -> vol.Schema:
+    """Events-mode Smart Schedule helper config."""
+    defaults = defaults or {}
+
+    target_selector = selector.EntitySelector(
+        selector.EntitySelectorConfig(
+            domain=["switch", "light", "input_boolean", "fan", "climate"],
         )
     )
+    icon_selector = selector.IconSelector(selector.IconSelectorConfig())
+    text_selector = selector.TextSelector(selector.TextSelectorConfig())
     event_action_selector = selector.SelectSelector(
         selector.SelectSelectorConfig(
             mode=selector.SelectSelectorMode.DROPDOWN,
@@ -166,14 +214,6 @@ def _schedule_schema(
     fields[_marker(CONF_TARGET_ENTITY, True)] = target_selector
     fields[
         vol.Optional(
-            CONF_SCHEDULE_KIND,
-            default=defaults.get(CONF_SCHEDULE_KIND, DEFAULT_SCHEDULE_KIND),
-        )
-    ] = kind_selector
-    # Event-mode fields. Always present in the form for layout simplicity
-    # — only meaningful when schedule_kind == events.
-    fields[
-        vol.Optional(
             CONF_EVENT_ACTION,
             default=defaults.get(CONF_EVENT_ACTION, DEFAULT_EVENT_ACTION),
         )
@@ -188,23 +228,14 @@ def _schedule_schema(
     fields[_marker(CONF_EVENT_SERVICE_DATA, False, {})] = service_data_selector
     fields[_marker(CONF_MODE_OFF_NAME, False, DEFAULT_MODE_OFF_NAME)] = text_selector
     fields[_marker(CONF_MODE_OFF_ICON, False, DEFAULT_MODE_OFF_ICON)] = icon_selector
-    fields[_marker(CONF_MODE_ON_NAME, False, DEFAULT_MODE_ON_NAME)] = text_selector
-    fields[_marker(CONF_MODE_ON_ICON, False, DEFAULT_MODE_ON_ICON)] = icon_selector
     fields[_marker(CONF_MODE_AUTO_NAME, False, DEFAULT_MODE_AUTO_NAME)] = text_selector
     fields[_marker(CONF_MODE_AUTO_ICON, False, DEFAULT_MODE_AUTO_ICON)] = icon_selector
-    fields[
-        vol.Optional(
-            CONF_RESTORE_AUTO_ON_BOUNDARY,
-            default=defaults.get(CONF_RESTORE_AUTO_ON_BOUNDARY, True),
-        )
-    ] = boolean_selector
     return vol.Schema(fields)
 
 
-def _schedule_validate(user_input: dict[str, Any]) -> None:
+def _event_schedule_validate(user_input: dict[str, Any]) -> None:
     for key, default in (
         (CONF_MODE_OFF_NAME, DEFAULT_MODE_OFF_NAME),
-        (CONF_MODE_ON_NAME, DEFAULT_MODE_ON_NAME),
         (CONF_MODE_AUTO_NAME, DEFAULT_MODE_AUTO_NAME),
     ):
         value = user_input.get(key)
@@ -212,44 +243,34 @@ def _schedule_validate(user_input: dict[str, Any]) -> None:
             user_input[key] = default
         else:
             user_input[key] = value.strip()
-
-    names = {
-        user_input[CONF_MODE_OFF_NAME],
-        user_input[CONF_MODE_ON_NAME],
-        user_input[CONF_MODE_AUTO_NAME],
-    }
-    if len(names) != 3:
+    if user_input[CONF_MODE_OFF_NAME] == user_input[CONF_MODE_AUTO_NAME]:
         raise vol.Invalid("duplicate_mode_names")
 
-    # Normalize schedule-kind + event fields.
-    kind = user_input.get(CONF_SCHEDULE_KIND, DEFAULT_SCHEDULE_KIND)
-    if kind not in (SCHEDULE_KIND_BLOCKS, SCHEDULE_KIND_EVENTS):
-        kind = DEFAULT_SCHEDULE_KIND
-    user_input[CONF_SCHEDULE_KIND] = kind
+    action = user_input.get(CONF_EVENT_ACTION, DEFAULT_EVENT_ACTION)
+    if action not in (EVENT_ACTION_TOGGLE, EVENT_ACTION_PULSE, EVENT_ACTION_CUSTOM):
+        action = DEFAULT_EVENT_ACTION
+    user_input[CONF_EVENT_ACTION] = action
 
-    if kind == SCHEDULE_KIND_EVENTS:
-        action = user_input.get(CONF_EVENT_ACTION, DEFAULT_EVENT_ACTION)
-        if action not in (EVENT_ACTION_TOGGLE, EVENT_ACTION_PULSE, EVENT_ACTION_CUSTOM):
-            action = DEFAULT_EVENT_ACTION
-        user_input[CONF_EVENT_ACTION] = action
+    if action == EVENT_ACTION_PULSE:
+        try:
+            duration = int(
+                user_input.get(CONF_PULSE_DURATION, DEFAULT_PULSE_DURATION)
+                or DEFAULT_PULSE_DURATION
+            )
+        except (TypeError, ValueError):
+            duration = DEFAULT_PULSE_DURATION
+        duration = max(MIN_PULSE_DURATION, min(MAX_PULSE_DURATION, duration))
+        user_input[CONF_PULSE_DURATION] = duration
 
-        if action == EVENT_ACTION_PULSE:
-            try:
-                duration = int(user_input.get(CONF_PULSE_DURATION, DEFAULT_PULSE_DURATION) or DEFAULT_PULSE_DURATION)
-            except (TypeError, ValueError):
-                duration = DEFAULT_PULSE_DURATION
-            duration = max(MIN_PULSE_DURATION, min(MAX_PULSE_DURATION, duration))
-            user_input[CONF_PULSE_DURATION] = duration
-
-        if action == EVENT_ACTION_CUSTOM:
-            service = (user_input.get(CONF_EVENT_SERVICE) or "").strip()
-            if "." not in service:
-                raise vol.Invalid("invalid_event_service")
-            user_input[CONF_EVENT_SERVICE] = service
-            data = user_input.get(CONF_EVENT_SERVICE_DATA) or {}
-            if not isinstance(data, dict):
-                raise vol.Invalid("invalid_event_service_data")
-            user_input[CONF_EVENT_SERVICE_DATA] = data
+    if action == EVENT_ACTION_CUSTOM:
+        service = (user_input.get(CONF_EVENT_SERVICE) or "").strip()
+        if "." not in service:
+            raise vol.Invalid("invalid_event_service")
+        user_input[CONF_EVENT_SERVICE] = service
+        data = user_input.get(CONF_EVENT_SERVICE_DATA) or {}
+        if not isinstance(data, dict):
+            raise vol.Invalid("invalid_event_service_data")
+        user_input[CONF_EVENT_SERVICE_DATA] = data
 
 
 # ---------------------------------------------------------------------------
@@ -588,10 +609,10 @@ class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
         """Top-level menu: pick the helper kind."""
         return self.async_show_menu(
             step_id="user",
-            menu_options=["schedule", "timer", "curve"],
+            menu_options=["schedule", "event_schedule", "timer", "curve"],
         )
 
-    # --- Schedule branch ---
+    # --- Schedule branch (blocks mode — weekly time windows) ---
 
     async def async_step_schedule(
         self, user_input: dict[str, Any] | None = None
@@ -612,6 +633,30 @@ class PowerPilzCompanionConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="schedule",
             data_schema=_schedule_schema(user_input),
+            errors=errors,
+        )
+
+    # --- Event Schedule branch (point-in-time triggers) ---
+
+    async def async_step_event_schedule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                _event_schedule_validate(user_input)
+            except vol.Invalid as err:
+                errors["base"] = str(err)
+            else:
+                user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_EVENT_SCHEDULE
+                title = str(user_input.get(CONF_NAME) or "").strip() or "Smart Event Schedule"
+                return self.async_create_entry(
+                    title=title, data={}, options=user_input
+                )
+
+        return self.async_show_form(
+            step_id="event_schedule",
+            data_schema=_event_schedule_schema(user_input),
             errors=errors,
         )
 
@@ -729,6 +774,8 @@ class PowerPilzCompanionOptionsFlow(OptionsFlow):
             return await self.async_step_timer()
         if entry_type == ENTRY_TYPE_CURVE:
             return await self.async_step_curve()
+        if entry_type == ENTRY_TYPE_EVENT_SCHEDULE:
+            return await self.async_step_event_schedule()
         return await self.async_step_schedule()
 
     async def async_step_curve(
@@ -768,6 +815,26 @@ class PowerPilzCompanionOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="schedule",
             data_schema=_schedule_schema(defaults),
+            errors=errors,
+        )
+
+    async def async_step_event_schedule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                _event_schedule_validate(user_input)
+            except vol.Invalid as err:
+                errors["base"] = str(err)
+            else:
+                user_input[CONF_ENTRY_TYPE] = ENTRY_TYPE_EVENT_SCHEDULE
+                return self.async_create_entry(title="", data=user_input)
+
+        defaults = {**self._entry.options, **(user_input or {})}
+        return self.async_show_form(
+            step_id="event_schedule",
+            data_schema=_event_schedule_schema(defaults),
             errors=errors,
         )
 

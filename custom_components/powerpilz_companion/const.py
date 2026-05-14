@@ -14,6 +14,7 @@ DOMAIN = "powerpilz_companion"
 
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_SCHEDULE = "schedule"
+ENTRY_TYPE_EVENT_SCHEDULE = "event_schedule"
 ENTRY_TYPE_TIMER = "timer"
 ENTRY_TYPE_CURVE = "curve"
 
@@ -94,16 +95,14 @@ CONF_MODE_AUTO_ICON = "mode_auto_icon"
 
 CONF_RESTORE_AUTO_ON_BOUNDARY = "restore_auto_on_boundary"
 
-# --- Smart Schedule kind (blocks vs events) ---
-# A Smart Schedule helper operates in one of two modes:
-#   - blocks: weekly time windows; target is on during windows, off
-#             outside. Default and backwards-compatible.
-#   - events: weekly point-in-time triggers; each event fires a
-#             configured action on the target. No on/off state.
-CONF_SCHEDULE_KIND = "schedule_kind"
-SCHEDULE_KIND_BLOCKS = "blocks"
-SCHEDULE_KIND_EVENTS = "events"
-DEFAULT_SCHEDULE_KIND = SCHEDULE_KIND_BLOCKS
+# --- Legacy schedule-kind discriminator (kept for migration only) ---
+# Before the split, Smart Schedule had two modes in one entry, picked
+# via `schedule_kind`. Helpers created in that era migrate on startup
+# to the new `ENTRY_TYPE_EVENT_SCHEDULE` entry type — see
+# `_migrate_legacy_event_schedule_entry` in __init__.py.
+CONF_SCHEDULE_KIND = "schedule_kind"  # legacy
+SCHEDULE_KIND_BLOCKS = "blocks"       # legacy
+SCHEDULE_KIND_EVENTS = "events"       # legacy
 
 # Event action — what happens at each event firing time.
 CONF_EVENT_ACTION = "event_action"
