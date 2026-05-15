@@ -11,6 +11,20 @@ A Home Assistant custom integration that adds four **Smart helper** types, each 
 
 Companion to the [PowerPilz](https://github.com/gregor-autischer/PowerPilz) Lovelace cards pack - use them together for a drastically simpler dashboard setup, or use the Companion standalone with any other cards.
 
+## Installation
+
+### HACS (Integration)
+
+1. Open HACS → Integrations.
+2. Menu → Custom repositories.
+3. Paste `https://github.com/gregor-autischer/PowerPilz-Companion` and select category **Integration**.
+4. Click **Add**, search for **PowerPilz Smart Helpers**, download.
+5. Restart Home Assistant.
+
+### Manual
+
+Copy `custom_components/powerpilz_companion` into your Home Assistant config directory's `custom_components/` folder. Restart Home Assistant.
+
 ## Why
 
 Home Assistant's native building blocks (`schedule`, `input_datetime`, `input_boolean`) are great primitives but don't do anything by themselves - you always need bridging automations to turn devices on/off at the right time, plus manual-override glue to handle "I want it on right now" cases.
@@ -49,20 +63,6 @@ Each Companion helper bundles all of that logic into one entity:
 
 - Multilingual (English + German)
 - HACS-ready (Integration category)
-
-## Installation
-
-### HACS (Integration)
-
-1. Open HACS → Integrations.
-2. Menu → Custom repositories.
-3. Paste `https://github.com/gregor-autischer/PowerPilz-Companion` and select category **Integration**.
-4. Click **Add**, search for **PowerPilz Smart Helpers**, download.
-5. Restart Home Assistant.
-
-### Manual
-
-Copy `custom_components/powerpilz_companion` into your Home Assistant config directory's `custom_components/` folder. Restart Home Assistant.
 
 ## Creating a helper
 
