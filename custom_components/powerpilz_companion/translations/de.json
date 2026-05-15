@@ -108,7 +108,6 @@
           "value_max": "Wertebereich — Maximum",
           "unit": "Einheit",
           "mode_on_value": "Boost-Wert im Ein-Modus",
-          "same_for_all_days": "Jeden Tag gleiche Kurve",
           "mode_off_name": "Aus-Modus — Name",
           "mode_off_icon": "Aus-Modus — Symbol",
           "mode_on_name": "Ein-Modus — Name",
@@ -121,8 +120,7 @@
           "update_interval_minutes": "Wie oft die Kurve abgetastet und an die Targets übertragen wird. Standard 15 Minuten.",
           "value_min": "Untere Grenze der Editor-Y-Achse und Wert-Begrenzung.",
           "value_max": "Obere Grenze der Editor-Y-Achse und Wert-Begrenzung.",
-          "mode_on_value": "Konstanter Wert, der im Ein-Modus geschrieben wird.",
-          "same_for_all_days": "Wenn aktiviert, zeigt der Editor nur einen Tag; die Kurve gilt dann für jeden Wochentag."
+          "mode_on_value": "Konstanter Wert, der im Ein-Modus geschrieben wird."
         }
       }
     },
@@ -225,7 +223,6 @@
           "value_max": "Wertebereich — Maximum",
           "unit": "Einheit",
           "mode_on_value": "Boost-Wert im Ein-Modus",
-          "same_for_all_days": "Jeden Tag gleiche Kurve",
           "mode_off_name": "Aus-Modus — Name",
           "mode_off_icon": "Aus-Modus — Symbol",
           "mode_on_name": "Ein-Modus — Name",

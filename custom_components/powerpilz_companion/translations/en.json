@@ -108,7 +108,6 @@
           "value_max": "Curve range — maximum",
           "unit": "Unit",
           "mode_on_value": "On mode boost value",
-          "same_for_all_days": "Same curve every day",
           "mode_off_name": "Off mode — name",
           "mode_off_icon": "Off mode — icon",
           "mode_on_name": "On mode — name",
@@ -121,8 +120,7 @@
           "update_interval_minutes": "How often the curve is sampled and the targets are updated. Default 15 minutes.",
           "value_min": "Lower bound of the editor Y-axis and the value clamp.",
           "value_max": "Upper bound of the editor Y-axis and the value clamp.",
-          "mode_on_value": "Constant value written while the helper is in On mode.",
-          "same_for_all_days": "When enabled the editor only shows one day; the curve is mirrored across all weekdays."
+          "mode_on_value": "Constant value written while the helper is in On mode."
         }
       }
     },
@@ -225,7 +223,6 @@
           "value_max": "Curve range — maximum",
           "unit": "Unit",
           "mode_on_value": "On mode boost value",
-          "same_for_all_days": "Same curve every day",
           "mode_off_name": "Off mode — name",
           "mode_off_icon": "Off mode — icon",
           "mode_on_name": "On mode — name",

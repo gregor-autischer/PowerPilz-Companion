@@ -33,7 +33,6 @@ CONF_VALUE_MIN = "value_min"
 CONF_VALUE_MAX = "value_max"
 CONF_UNIT = "unit"
 CONF_MODE_ON_VALUE = "mode_on_value"
-CONF_SAME_FOR_ALL_DAYS = "same_for_all_days"
 
 DEFAULT_UPDATE_INTERVAL = 15
 DEFAULT_VALUE_MIN = 5.0
@@ -218,7 +217,6 @@ ATTR_VALUE_MAX = "value_max"
 ATTR_UNIT = "unit"
 ATTR_UPDATE_INTERVAL = "update_interval_minutes"
 ATTR_TARGET_ENTITIES = "target_entities"
-ATTR_SAME_FOR_ALL_DAYS = "same_for_all_days"
 ATTR_MODE_ON_VALUE = "mode_on_value"
 
 # --- Storage ---

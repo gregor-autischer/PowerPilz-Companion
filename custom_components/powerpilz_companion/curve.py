@@ -34,7 +34,6 @@ from .const import (
     ATTR_MODE_ICONS,
     ATTR_MODE_NAMES,
     ATTR_MODE_ON_VALUE,
-    ATTR_SAME_FOR_ALL_DAYS,
     ATTR_TARGET_ENTITIES,
     ATTR_TODAY_POINTS,
     ATTR_UNIT,
@@ -50,7 +49,6 @@ from .const import (
     CONF_MODE_ON_NAME,
     CONF_MODE_ON_VALUE,
     CONF_NAME,
-    CONF_SAME_FOR_ALL_DAYS,
     CONF_TARGET_ENTITIES,
     CONF_UNIT,
     CONF_UPDATE_INTERVAL,
@@ -133,9 +131,6 @@ class SmartCurveSelect(SelectEntity, RestoreEntity):
         self._unit: str = str(config.get(CONF_UNIT, DEFAULT_UNIT))
         self._mode_on_value: float = float(
             config.get(CONF_MODE_ON_VALUE, DEFAULT_MODE_ON_VALUE)
-        )
-        self._same_for_all_days: bool = bool(
-            config.get(CONF_SAME_FOR_ALL_DAYS, False)
         )
 
         self._mode_names: dict[str, str] = {
@@ -224,7 +219,6 @@ class SmartCurveSelect(SelectEntity, RestoreEntity):
             ATTR_VALUE_MAX: self._value_max,
             ATTR_UNIT: self._unit,
             ATTR_UPDATE_INTERVAL: self._update_interval,
-            ATTR_SAME_FOR_ALL_DAYS: self._same_for_all_days,
             ATTR_MODE_ON_VALUE: self._mode_on_value,
             "companion_entity": self.entity_id,
         }
@@ -259,11 +253,7 @@ class SmartCurveSelect(SelectEntity, RestoreEntity):
     def _points_for_day(
         self, dt_obj: datetime
     ) -> list[dict[str, Any]]:
-        key = (
-            WEEKDAY_KEYS[0]
-            if self._same_for_all_days
-            else self._weekday_key_for(dt_obj)
-        )
+        key = self._weekday_key_for(dt_obj)
         return list(self._points.get(key, []))
 
     def _points_for_today(self) -> list[dict[str, Any]]:

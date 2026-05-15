@@ -47,7 +47,6 @@ from .const import (
     CONF_NAME,
     CONF_PULSE_DURATION,
     CONF_RESTORE_AUTO_ON_BOUNDARY,
-    CONF_SAME_FOR_ALL_DAYS,
     CONF_STATE_ACTIVE_ICON,
     CONF_STATE_ACTIVE_NAME,
     CONF_STATE_INACTIVE_ICON,
@@ -466,7 +465,6 @@ def _curve_schema(
     )
     text_selector = selector.TextSelector(selector.TextSelectorConfig())
     icon_selector = selector.IconSelector(selector.IconSelectorConfig())
-    boolean_selector = selector.BooleanSelector()
     interval_selector = selector.NumberSelector(
         selector.NumberSelectorConfig(
             min=1, max=240, step=1,
@@ -516,12 +514,6 @@ def _curve_schema(
             default=defaults.get(CONF_MODE_ON_VALUE, DEFAULT_MODE_ON_VALUE),
         )
     ] = value_selector
-    fields[
-        vol.Optional(
-            CONF_SAME_FOR_ALL_DAYS,
-            default=defaults.get(CONF_SAME_FOR_ALL_DAYS, False),
-        )
-    ] = boolean_selector
     fields[_marker(CONF_MODE_OFF_NAME, False, DEFAULT_MODE_OFF_NAME)] = text_selector
     fields[_marker(CONF_MODE_OFF_ICON, False, DEFAULT_MODE_OFF_ICON)] = icon_selector
     fields[_marker(CONF_MODE_ON_NAME, False, DEFAULT_MODE_ON_NAME)] = text_selector
