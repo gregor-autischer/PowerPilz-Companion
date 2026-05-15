@@ -2,10 +2,12 @@
 
 [![hacs](https://img.shields.io/badge/hacs-custom-4f46e5?style=flat-square)](https://github.com/hacs/integration) [![version](https://img.shields.io/github/v/release/gregor-autischer/PowerPilz-Companion?sort=semver&style=flat-square&label=version&color=9a48d3)](https://github.com/gregor-autischer/PowerPilz-Companion/releases) [![downloads](https://img.shields.io/github/downloads/gregor-autischer/PowerPilz-Companion/total?color=ec4899&label=downloads&style=flat-square&cacheSeconds=3600)](https://github.com/gregor-autischer/PowerPilz-Companion/releases)
 
-A Home Assistant custom integration that adds two **Smart helper** types, each designed to collapse a multi-entity + bridging-automation setup into a single entity that drives your devices autonomously:
+A Home Assistant custom integration that adds four **Smart helper** types, each designed to collapse a multi-entity + bridging-automation setup into a single entity that drives your devices autonomously:
 
-- 🗓 **Smart Schedule** - a `select` entity with three override modes (Off / On / Auto) plus an accompanying `binary_sensor` that reflects whether the weekly plan is currently active. Weekly blocks are stored inside the integration itself; edit them directly in the PowerPilz Schedule Lovelace card (long-press).
+- 🗓 **Smart Schedule** - a `select` entity with three override modes (Off / On / Auto) and a weekly plan of on/off blocks. The `schedule_active` flag lives as an attribute on the select for use in state triggers. Weekly blocks are stored inside the integration itself; edit them in the PowerPilz Schedule Lovelace card (long-press).
+- 🔔 **Smart Event Schedule** - a `select` entity with two modes (Off / Auto), weekly point-in-time triggers, and a companion `button.*_trigger` for manual press. Each event fires Toggle / Pulse / a custom service on the target; the button's history records every fire.
 - ⏱ **Smart Timer** - a `switch` entity that autonomously turns a target on at a configured start time and off at an end time (one-shot), with customizable icons, labels and direction.
+- 🌡 **Smart Curve** - a `select` + `sensor` pair driving one or more climate / number targets with a weekly value curve, sampled at a configurable cadence (monotone-cubic interpolation).
 
 Companion to the [PowerPilz](https://github.com/gregor-autischer/PowerPilz) Lovelace cards pack - use them together for a drastically simpler dashboard setup, or use the Companion standalone with any other cards.
 
@@ -17,7 +19,7 @@ Each Companion helper bundles all of that logic into one entity:
 
 | Traditional HA setup | Companion replacement |
 | :-- | :-- |
-| schedule helper + switch + input_select mode + 2 automations | **one** Smart Schedule entity (+ its binary_sensor) |
+| schedule helper + switch + input_select mode + 2 automations | **one** Smart Schedule entity |
 | switch + 2 input_datetimes + input_boolean + 2 automations | **one** Smart Timer entity |
 
 ## Features
@@ -25,9 +27,8 @@ Each Companion helper bundles all of that logic into one entity:
 ### Smart Schedule
 
 - Single `select.*` entity exposing three modes (renameable, with custom icons): Off / On / Auto
-- Weekly schedule stored **inside the integration** (v0.4+) - no separate `schedule.*` helper needed
-- Companion `binary_sensor.<name>_active` - use as a state trigger in automations, 1:1 replacement for `schedule.*` on/off triggers
-- Rich attributes on the select + binary_sensor for templates: `schedule_active`, `next_event`, `next_start`, `next_end`, `current_window`, `today_blocks`, `week_blocks`
+- Weekly schedule stored **inside the integration** - no separate `schedule.*` helper needed
+- Rich attributes for triggers + templates: `schedule_active`, `next_event`, `next_start`, `next_end`, `current_window`, `today_blocks`, `week_blocks`
 - In **Auto** mode: drives the target device on/off based on the weekly plan
 - In **Off** / **On** mode: forces the target to the corresponding state
 - Optional "resume Auto at next schedule boundary" - a manual override is automatically lifted at the next on/off transition (Nest-thermostat style)
@@ -77,8 +78,7 @@ Copy `custom_components/powerpilz_companion` into your Home Assistant config dir
 
 On confirmation you get:
 
-- `select.living_room_heating` - the Smart Schedule entity (three modes, rich schedule attributes)
-- `binary_sensor.living_room_heating_active` - flips on/off with the weekly plan
+- `select.living_room_heating` - the Smart Schedule entity (three modes, rich schedule attributes incl. `schedule_active`)
 
 Edit the weekly plan by **long-pressing the PowerPilz Schedule card** on your dashboard.
 
@@ -150,15 +150,6 @@ The [PowerPilz](https://github.com/gregor-autischer/PowerPilz) dashboard card pa
 | `today_blocks` | Raw list of today's blocks |
 | `week_blocks` | Full `{monday: [...], ..., sunday: [...]}` |
 
-### Smart Schedule `binary_sensor.*_active`
-
-| Attribute | Description |
-| :-- | :-- |
-| State | `on` while a block is currently active, `off` otherwise |
-| `schedule_active` | Mirror of the state for convenience |
-| `current_window` / `next_event` / `next_start` / `next_end` / `today_blocks` / `week_blocks` | Mirrored from the parent select for single-entity templates |
-| `companion_entity` | Back-pointer to the parent `select.*` |
-
 ### Smart Timer `switch.*`
 
 | Attribute | Description |
@@ -174,30 +165,40 @@ The [PowerPilz](https://github.com/gregor-autischer/PowerPilz) dashboard card pa
 
 ## Using a Smart Schedule in automations
 
-The companion `binary_sensor.*_active` is a drop-in replacement for a native `schedule.*` helper as a state trigger:
+The `schedule_active` flag is exposed as an attribute on the select. Trigger on the attribute directly:
 
 ```yaml
 # Trigger when the schedule becomes active
 trigger:
   platform: state
-  entity_id: binary_sensor.living_room_heating_active
-  to: "on"
+  entity_id: select.living_room_heating
+  attribute: schedule_active
+  to: true
 
-# Or condition
+# Or as a condition
 condition:
-  condition: state
-  entity_id: binary_sensor.living_room_heating_active
-  state: "on"
+  condition: template
+  value_template: "{{ state_attr('select.living_room_heating', 'schedule_active') }}"
 ```
 
-Rich attributes on both the select and binary_sensor give you more:
+If you prefer a dedicated binary_sensor (for ergonomics or for older state-trigger automations), define one in `configuration.yaml`:
 
 ```yaml
-# Template: when's the next schedule event?
+template:
+  - binary_sensor:
+      - name: "Living Room Heating Active"
+        state: "{{ state_attr('select.living_room_heating', 'schedule_active') }}"
+        device_class: running
+```
+
+Rich attributes on the select give you more for templates:
+
+```yaml
+# When's the next schedule event?
 template: >
   {{ state_attr('select.living_room_heating', 'next_event') }}
 
-# Template: are we in a block with a specific data payload?
+# Are we in a block with a specific data payload?
 template: >
   {% set w = state_attr('select.living_room_heating', 'current_window') %}
   {{ w is not none and w.data is defined and w.data.mode == 'heat' }}
