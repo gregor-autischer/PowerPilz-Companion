@@ -4,13 +4,15 @@ from __future__ import annotations
 DOMAIN = "powerpilz_companion"
 
 # --- Entry-type discriminator ---
-# The integration hosts two helper kinds sharing the same domain:
-#   - ENTRY_TYPE_SCHEDULE: a `select` entity with 3 modes + a
-#     `binary_sensor` exposing the current schedule-active state.
-#     Blocks are stored by the integration itself; no external
-#     `schedule.*` helper is involved anymore (v0.4+).
-#   - ENTRY_TYPE_TIMER: a `switch` entity with attached on/off datetimes
-#     that drives the target device autonomously.
+# The integration hosts four helper kinds sharing the same domain:
+#   - ENTRY_TYPE_SCHEDULE: a `select` entity with 3 modes; weekly
+#     blocks are stored by the integration itself. The `schedule_active`
+#     flag lives as an attribute on the select.
+#   - ENTRY_TYPE_EVENT_SCHEDULE: `select` (2 modes) + companion
+#     `button.*_trigger` that records every event fire in history.
+#   - ENTRY_TYPE_TIMER: `switch` with attached on/off datetimes that
+#     drives the target device autonomously.
+#   - ENTRY_TYPE_CURVE: `select` + `sensor` for weekly value curves.
 
 CONF_ENTRY_TYPE = "entry_type"
 ENTRY_TYPE_SCHEDULE = "schedule"
@@ -154,10 +156,11 @@ ATTR_TARGET_ENTITY = "target_entity"
 ATTR_TARGET_STATE = "target_state"
 ATTR_MODE_ICONS = "mode_icons"
 ATTR_MODE_NAMES = "mode_names"
-# Schedule-state exposed by both the select and the accompanying
-# binary_sensor. `next_event` mirrors HA's native `schedule.*` attribute
-# naming so templates that referenced the old linked schedule keep
-# working with minimal changes.
+# Schedule-state exposed as attributes on the select entity. Use
+# `state` triggers with `attribute: schedule_active` for automations
+# (or build a template binary_sensor). `next_event` mirrors HA's
+# native `schedule.*` attribute naming so templates that referenced
+# the old linked schedule keep working with minimal changes.
 ATTR_SCHEDULE_ACTIVE = "schedule_active"
 ATTR_NEXT_EVENT = "next_event"
 ATTR_NEXT_START = "next_start"

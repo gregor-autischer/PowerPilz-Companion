@@ -1,12 +1,17 @@
 """Config flow for PowerPilz Companion.
 
-Two helper kinds are offered:
+Four helper kinds are offered:
 
-  - **Smart Schedule** — select entity with 3 modes + companion
-    binary_sensor. Weekly blocks are edited in the PowerPilz Schedule
+  - **Smart Schedule** — select with 3 modes (Off/On/Auto) and weekly
+    on/off blocks. The blocks are edited in the PowerPilz Schedule
     Lovelace card (long-press on the card).
+  - **Smart Event Schedule** — select with 2 modes (Off/Auto) and a
+    companion trigger button; each weekly event fires Toggle/Pulse/
+    Custom on the target.
   - **Smart Timer** — autonomous switch entity driving a target device
     at configured on/off datetimes.
+  - **Smart Curve** — weekly value curve applied to climate/number
+    targets at a configurable cadence.
 
 The top-level `async_step_user` shows a menu; each branch has its own
 `async_show_form` step and creates an entry carrying a distinguishing

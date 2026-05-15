@@ -1,13 +1,18 @@
 """PowerPilz Companion integration.
 
-Hosts two helper kinds under one domain:
+Hosts four helper kinds under one domain:
 
-- **Smart Schedule** → a `select` entity with 3 modes + a companion
-  `binary_sensor` exposing the currently-active state. Weekly schedule
-  blocks are stored natively by this integration (no external
-  `schedule.*` helper needed).
-- **Smart Timer** → a `switch` entity that autonomously drives a target
+- **Smart Schedule** → `select` entity with 3 modes (Off/On/Auto) and
+  a weekly blocks plan stored natively. The `schedule_active` flag is
+  exposed as an attribute on the select — consumers either trigger on
+  that attribute or build a template `binary_sensor` on top.
+- **Smart Event Schedule** → `select` entity (2 modes) plus a companion
+  `button.*_trigger` that records every event fire (scheduled or manual)
+  in HA history.
+- **Smart Timer** → `switch` entity that autonomously drives a target
   device at configured on/off datetimes.
+- **Smart Curve** → `select` + `sensor` for weekly value curves applied
+  to one or more climate / number targets.
 
 The `entry_type` field in the config entry options decides which
 platforms are loaded for a given entry.
@@ -66,7 +71,10 @@ def _platforms_for(entry: ConfigEntry) -> list[Platform]:
         return [Platform.SELECT, Platform.SENSOR]
     if entry_type == ENTRY_TYPE_EVENT_SCHEDULE:
         return [Platform.SELECT, Platform.BUTTON]
-    return [Platform.SELECT, Platform.BINARY_SENSOR]
+    # Default: schedule (blocks). Just the select entity; consumers use
+    # the `schedule_active` attribute trigger or build their own
+    # template binary_sensor on top of it.
+    return [Platform.SELECT]
 
 
 def _migrate_legacy_event_schedule_entry(
@@ -78,10 +86,6 @@ def _migrate_legacy_event_schedule_entry(
     plus `options.schedule_kind == "events"`. This routine flips them to
     the new `entry_type == "event_schedule"` and strips the legacy
     `schedule_kind` field. Idempotent: safe to call on every startup.
-
-    Side-effect: drops the now-orphan `binary_sensor.*_active` entry
-    from the entity registry (the binary_sensor platform is no longer
-    loaded for event_schedule helpers).
 
     Returns True if the entry was migrated.
     """
@@ -96,22 +100,39 @@ def _migrate_legacy_event_schedule_entry(
     options.pop(CONF_SCHEDULE_KIND, None)
     hass.config_entries.async_update_entry(entry, options=options)
 
-    # Drop the orphan binary_sensor.*_active — event_schedule has no
-    # binary_sensor platform, so the entity would stay "unavailable".
-    registry = er.async_get(hass)
-    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-        if reg_entry.platform == DOMAIN and reg_entry.entity_id.startswith("binary_sensor."):
-            registry.async_remove(reg_entry.entity_id)
-            _LOGGER.info(
-                "Removed legacy %s for migrated event_schedule",
-                reg_entry.entity_id,
-            )
-
     _LOGGER.info(
         "Migrated %s to event_schedule entry type",
         entry.title,
     )
     return True
+
+
+def _purge_orphan_binary_sensors(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Remove any `binary_sensor.*_active` left behind by older versions.
+
+    The blocks-mode schedule helper used to spawn a companion
+    `binary_sensor.*_active` entity that mirrored the `schedule_active`
+    flag. As of v0.7 we no longer load the binary_sensor platform —
+    consumers read the flag from the select's attribute or build their
+    own template binary_sensor. This sweep removes the orphaned
+    entries from the entity registry so they don't stay "unavailable"
+    forever. Idempotent; safe to call on every startup.
+    """
+    registry = er.async_get(hass)
+    removed: list[str] = []
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.platform == DOMAIN and reg_entry.entity_id.startswith("binary_sensor."):
+            registry.async_remove(reg_entry.entity_id)
+            removed.append(reg_entry.entity_id)
+    if removed:
+        _LOGGER.warning(
+            "Removed %d orphan binary_sensor(s) for %s: %s",
+            len(removed),
+            entry.title,
+            ", ".join(removed),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -434,10 +455,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {}
 
     # One-shot migration: legacy entries with schedule_kind=events get
-    # promoted to the new ENTRY_TYPE_EVENT_SCHEDULE entry type. After
-    # this, _platforms_for returns the right platforms (incl. BUTTON)
-    # and the binary_sensor platform is no longer loaded for them.
+    # promoted to the new ENTRY_TYPE_EVENT_SCHEDULE entry type.
     _migrate_legacy_event_schedule_entry(hass, entry)
+
+    # Sweep orphan binary_sensor.*_active entities — the platform is
+    # no longer loaded as of v0.7 (use the select's schedule_active
+    # attribute trigger instead, or roll a template binary_sensor).
+    _purge_orphan_binary_sensors(hass, entry)
 
     # One-shot migration from the legacy v0.3 linked-schedule model: if
     # the entry still carries `linked_schedule` and our store doesn't
